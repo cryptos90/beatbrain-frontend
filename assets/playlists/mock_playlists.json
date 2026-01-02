@@ -1,0 +1,27 @@
+[
+  {
+    "id": "mock_01",
+    "title": "Synthwave Nights",
+    "cover": "playlist_01.png"
+  },
+  {
+    "id": "mock_02",
+    "title": "Lo-Fi Focus",
+    "cover": "playlist_02.png"
+  },
+  {
+    "id": "mock_03",
+    "title": "Indie Discovery",
+    "cover": "playlist_03.png"
+  },
+  {
+    "id": "mock_04",
+    "title": "Hip-Hop Heat",
+    "cover": "playlist_04.png"
+  },
+  {
+    "id": "mock_05",
+    "title": "Pop Essentials",
+    "cover": "playlist_05.png"
+  }
+]
