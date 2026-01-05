@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -8,9 +9,11 @@ import {
   Text,
   TextInput,
   View,
+  Keyboard,
 } from "react-native";
 
 import { Audio } from "expo-av";
+import { Asset } from "expo-asset";
 
 import { API_BASE_URL } from "./src/config";
 import { Colors, Radius } from "./src/theme";
@@ -85,8 +88,6 @@ const CHOOSE_FOOTER_PADDING_BOTTOM = 24 + 56;
 // ---------------- Quiz constants ----------------
 const QUESTIONS_PER_QUIZ = 5;
 const TIMER_SECONDS = 30;
-const TIMER_TICK_MS = 100;
-
 // ---------------- App ----------------
 
 export default function App() {
@@ -105,22 +106,48 @@ export default function App() {
   const [selectedPlaylistIndex, setSelectedPlaylistIndex] = useState(0);
   const selectedPlaylist = MOCK_PLAYLISTS[selectedPlaylistIndex];
 
+  // Prefetch playlist covers once on app start (improves Choose screen cover loading)
+  useEffect(() => {
+    (async () => {
+      try {
+        await Promise.all(
+          MOCK_PLAYLISTS.map((p) => Asset.fromModule(p.cover).downloadAsync())
+        );
+      } catch {
+        // Ignore prefetch errors
+      }
+    })();
+  }, []);
+
   // ---------------- Quiz runtime state ----------------
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const currentQ = quizQuestions[qIndex] ?? null;
+  const currentQRef = useRef<QuizQuestion | null>(null);
 
   const [score, setScore] = useState(0);
 
   // answer state
   const [revealed, setRevealed] = useState(false);
+  // refs to avoid stale closures (e.g. timer timeout)
+  const revealedRef = useRef(false);
   const [pickedOptionId, setPickedOptionId] = useState<string | null>(null);
   const [yearInput, setYearInput] = useState<string>("");
   const [yearWasCorrect, setYearWasCorrect] = useState<boolean | null>(null);
 
+  // keep refs in sync to prevent stale closure issues (timeouts, etc.)
+  useEffect(() => {
+    revealedRef.current = revealed;
+  }, [revealed]);
+
+  useEffect(() => {
+    currentQRef.current = currentQ;
+  }, [currentQ]);
+
   // timer state
-  const [timeLeftMs, setTimeLeftMs] = useState(TIMER_SECONDS * 1000);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerAnim = useRef(new Animated.Value(1)).current;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [timerBarW, setTimerBarW] = useState(0);
 
   // audio state
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -295,37 +322,40 @@ export default function App() {
     setPickedOptionId(null);
     setYearInput("");
     setYearWasCorrect(null);
-    setTimeLeftMs(TIMER_SECONDS * 1000);
   }
 
   function startTimer() {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setTimeLeftMs((prev) => {
-        const next = prev - TIMER_TICK_MS;
-        if (next <= 0) {
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
-          onTimeout();
-          return 0;
-        }
-        return next;
-      });
-    }, TIMER_TICK_MS);
+    stopTimer();
+
+    // reset progress to full and animate smoothly to 0 without JS re-renders
+    timerAnim.setValue(1);
+
+    Animated.timing(timerAnim, {
+      toValue: 0,
+      duration: TIMER_SECONDS * 1000,
+      useNativeDriver: true,
+    }).start();
+
+    timeoutRef.current = setTimeout(() => {
+      onTimeout();
+    }, TIMER_SECONDS * 1000);
   }
 
   function stopTimer() {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = null;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    timerAnim.stopAnimation();
   }
 
   function onTimeout() {
-    if (revealed) return;
+    if (revealedRef.current) return;
 
     stopTimer();
+    Keyboard.dismiss();
     setRevealed(true);
 
-    if (currentQ?.type === "YEAR_TOLERANCE_INPUT") {
+    const q = currentQRef.current;
+    if (q?.type === "YEAR_TOLERANCE_INPUT") {
       setYearWasCorrect(false);
       return;
     }
@@ -378,10 +408,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlaylistIndex, screen.name]);
 
-  const timerProgress = useMemo(() => {
-    return Math.max(0, Math.min(1, timeLeftMs / (TIMER_SECONDS * 1000)));
-  }, [timeLeftMs]);
-
   function QuestionTitle(q: QuizQuestion) {
     switch (q.type) {
       case "YEAR_TOLERANCE_INPUT":
@@ -407,6 +433,8 @@ export default function App() {
     if (!currentQ) return;
     if (revealed) return;
 
+    Keyboard.dismiss();
+
     stopTimer();
     setRevealed(true);
     setPickedOptionId(optId);
@@ -418,6 +446,8 @@ export default function App() {
   function handleSubmitYearTolerance() {
     if (!currentQ) return;
     if (revealed) return;
+
+    Keyboard.dismiss();
 
     const guess = parseInt(yearInput.trim(), 10);
     stopTimer();
@@ -501,6 +531,11 @@ export default function App() {
               data={MOCK_PLAYLISTS}
               horizontal
               showsHorizontalScrollIndicator={false}
+              initialNumToRender={3}
+              windowSize={5}
+              removeClippedSubviews
+              maxToRenderPerBatch={3}
+              updateCellsBatchingPeriod={50}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{ paddingHorizontal: (SCREEN_W - CARD_W) / 2 }}
               snapToInterval={CARD_W + 18}
@@ -515,6 +550,7 @@ export default function App() {
                 const isSelected = index === selectedPlaylistIndex;
                 return (
                   <View style={{ width: CARD_W, marginRight: 18, alignItems: "center" }}>
+
                     <View
                       style={{
                         backgroundColor: Colors.navy,
@@ -685,7 +721,7 @@ export default function App() {
     const correctId = currentQ.correctOptionId ?? null;
     const showSongInfo = revealed;
 
-    const AnswerButtons = () => {
+    const renderAnswerButtons = () => {
       if (currentQ.type === "YEAR_TOLERANCE_INPUT") {
         return (
           <View style={{ marginTop: 18 }}>
@@ -803,10 +839,32 @@ export default function App() {
           </View>
         </View>
 
+        <Text style={{ fontSize: 18, fontWeight: "800", color: Colors.textOnBg, textAlign: "center", marginTop: 10 }}>
+          Question {qIndex + 1}/{QUESTIONS_PER_QUIZ}
+        </Text>
+
         {/* TIMER BAR */}
         <View style={{ paddingHorizontal: 18, marginTop: 10 }}>
-          <View style={{ height: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden" }}>
-            <View style={{ width: `${timerProgress * 100}%`, height: "100%", backgroundColor: Colors.navy }} />
+          <View
+            onLayout={(e) => setTimerBarW(e.nativeEvent.layout.width)}
+            style={{ height: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden" }}
+          >
+            <Animated.View
+              style={{
+                width: "100%",
+                height: "100%",
+                backgroundColor: Colors.navy,
+                transform: [
+                  {
+                    translateX: timerAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-(timerBarW / 2), 0],
+                    }),
+                  },
+                  { scaleX: timerAnim },
+                ],
+              }}
+            />
           </View>
         </View>
 
@@ -817,27 +875,15 @@ export default function App() {
               backgroundColor: Colors.navy,
               borderRadius: Radius.xl,
               paddingVertical: 28,
+              paddingHorizontal: 18,
               alignItems: "center",
               marginTop: 6,
             }}
           >
-            <Text style={{ color: Colors.textOnNavy, fontSize: 30, fontWeight: "700" }}>Question</Text>
+            <Text style={{ color: Colors.textOnNavy, fontSize: 24, fontWeight: "800", textAlign: "center" }}>{qTitle}</Text>
           </View>
 
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 12, alignItems: "center" }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: Colors.textOnBg }}>
-              Question {qIndex + 1}/{QUESTIONS_PER_QUIZ}
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: Colors.textOnBg, opacity: 0.85 }}>
-              {Math.ceil(timeLeftMs / 1000)}s
-            </Text>
-          </View>
-
-          <Text style={{ marginTop: 14, fontSize: 20, fontWeight: "800", color: Colors.textOnBg, textAlign: "center" }}>
-            {qTitle}
-          </Text>
-
-          <AnswerButtons />
+          {renderAnswerButtons()}
 
           {showSongInfo && (
             <View style={{ marginTop: "auto", paddingBottom: 24 }}>
