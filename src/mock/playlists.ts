@@ -7,27 +7,27 @@ export type MockPlaylist = {
 export const MOCK_PLAYLISTS: MockPlaylist[] = [
   {
     id: 'playlist_01',
-    title: 'Synthwave Nights',
-    cover: require('../../assets/playlists/playlist_01.png'),
+    title: '70s Playlist',
+    cover: require('../../assets/playlists/70er.png'),
   },
   {
     id: 'playlist_02',
-    title: 'Lo-Fi Focus',
-    cover: require('../../assets/playlists/playlist_02.png'),
+    title: '80s Playlist',
+    cover: require('../../assets/playlists/80er.png'),
   },
   {
     id: 'playlist_03',
-    title: 'Indie Discovery',
-    cover: require('../../assets/playlists/playlist_03.png'),
+    title: '90s Playlist',
+    cover: require('../../assets/playlists/90er.png'),
   },
   {
     id: 'playlist_04',
-    title: 'Hip-Hop Heat',
-    cover: require('../../assets/playlists/playlist_04.png'),
+    title: 'Hip-Hop Playlist',
+    cover: require('../../assets/playlists/HipHop.png'),
   },
   {
     id: 'playlist_05',
-    title: 'Pop Essentials',
-    cover: require('../../assets/playlists/playlist_05.png'),
+    title: 'Rock Playlist',
+    cover: require('../../assets/playlists/Rock.png'),
   },
 ];

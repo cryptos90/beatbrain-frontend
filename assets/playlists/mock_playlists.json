@@ -1,27 +1,27 @@
 [
   {
     "id": "mock_01",
-    "title": "Synthwave Nights",
-    "cover": "playlist_01.png"
+    "title": "80s Playlist",
+    "cover": "80er.png"
   },
   {
     "id": "mock_02",
-    "title": "Lo-Fi Focus",
-    "cover": "playlist_02.png"
+    "title": "90s Playlist",
+    "cover": "90er.png"
   },
   {
     "id": "mock_03",
-    "title": "Indie Discovery",
-    "cover": "playlist_03.png"
+    "title": "70s Playlist",
+    "cover": "70er.png"
   },
   {
     "id": "mock_04",
-    "title": "Hip-Hop Heat",
-    "cover": "playlist_04.png"
+    "title": "Hip-Hop Playlist",
+    "cover": "HipHop.png"
   },
   {
     "id": "mock_05",
-    "title": "Pop Essentials",
-    "cover": "playlist_05.png"
+    "title": "Rock Playlist",
+    "cover": "Rock.png"
   }
 ]

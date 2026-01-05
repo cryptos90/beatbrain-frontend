@@ -14,8 +14,11 @@ import { API_BASE_URL } from './src/config';
 import { Colors, Radius } from './src/theme';
 import { StartScreen } from './src/screens/StartScreen';
 import { SinglePlayerMenu } from './src/screens/SinglePlayerMenu';
-import { BBButton } from './src/components/BBButton';
-import { MOCK_PLAYLISTS, MockPlaylist } from './src/mock/playlists';
+import { BBButton } from "./src/components/BBButton";
+import { MOCK_PLAYLISTS } from "./src/mock/playlists";
+import type { MockPlaylist } from "./src/mock/playlists";
+
+
 
 type Track = { id: string; name: string; artist: string; spotifyUri: string };
 
@@ -63,10 +66,8 @@ export default function App() {
 
   // Carousel state
   const carouselRef = useRef<FlatList<MockPlaylist>>(null);
-  const autoScrollTimer = useRef<any>(null);
   const [selectedPlaylistIndex, setSelectedPlaylistIndex] = useState(0);
   const selectedPlaylist = MOCK_PLAYLISTS[selectedPlaylistIndex];
-  const [isHoldingCarousel, setIsHoldingCarousel] = useState(false);
 
   async function loadMockTracks(mockPlaylistId: string) {
     setLoadingTracks(true);
@@ -111,25 +112,6 @@ export default function App() {
   }
 
   const canStartQuiz = useMemo(() => (tracks ? tracks.length >= 4 : false), [tracks]);
-
-  // Auto-scroll carousel (pause on hold)
-  useEffect(() => {
-    if (isHoldingCarousel) return;
-
-    if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
-
-    autoScrollTimer.current = setInterval(() => {
-      setSelectedPlaylistIndex((prev) => {
-        const next = (prev + 1) % MOCK_PLAYLISTS.length;
-        carouselRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, 3500);
-
-    return () => {
-      if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
-    };
-  }, [isHoldingCarousel]);
 
   // When playlist changes while on choose screen, load matching mock tracks
   useEffect(() => {
@@ -189,9 +171,6 @@ export default function App() {
             snapToInterval={CARD_W + 18}
             decelerationRate="fast"
             bounces={false}
-            // ✅ hold-to-pause without blocking swipes
-            onTouchStart={() => setIsHoldingCarousel(true)}
-            onTouchEnd={() => setIsHoldingCarousel(false)}
             onMomentumScrollEnd={(e) => {
               const x = e.nativeEvent.contentOffset.x;
               const idx = Math.round(x / (CARD_W + 18));
