@@ -4,30 +4,26 @@ export type MockPlaylist = {
   cover: any;
 };
 
-export const MOCK_PLAYLISTS: MockPlaylist[] = [
-  {
-    id: 'playlist_01',
-    title: '70s Playlist',
-    cover: require('../../assets/playlists/70er.png'),
-  },
-  {
-    id: 'playlist_02',
-    title: '80s Playlist',
-    cover: require('../../assets/playlists/80er.png'),
-  },
-  {
-    id: 'playlist_03',
-    title: '90s Playlist',
-    cover: require('../../assets/playlists/90er.png'),
-  },
-  {
-    id: 'playlist_04',
-    title: 'Hip-Hop Playlist',
-    cover: require('../../assets/playlists/HipHop.png'),
-  },
-  {
-    id: 'playlist_05',
-    title: 'Rock Playlist',
-    cover: require('../../assets/playlists/Rock.png'),
-  },
-];
+type RawPlaylist = {
+  id: string;
+  title: string;
+  cover: string; // filename in assets/playlists
+};
+
+// ✅ mock_playlist.json liegt in: assets/playlists/
+import rawPlaylists from "../../assets/playlists/mock_playlists.json";
+
+// ❗ In React Native muss require() statisch sein → Mapping-Tabelle:
+const COVER_MAP: Record<string, any> = {
+  "80er.png": require("../../assets/playlists/80er.png"),
+  "90er.png": require("../../assets/playlists/90er.png"),
+  "70er.png": require("../../assets/playlists/70er.png"),
+  "HipHop.png": require("../../assets/playlists/HipHop.png"),
+  "Rock.png": require("../../assets/playlists/Rock.png"),
+};
+
+export const MOCK_PLAYLISTS: MockPlaylist[] = (rawPlaylists as RawPlaylist[]).map((p) => ({
+  id: p.id,
+  title: p.title,
+  cover: COVER_MAP[p.cover],
+}));

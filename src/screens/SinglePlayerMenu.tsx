@@ -30,7 +30,7 @@ export function SinglePlayerMenu({
 
       <View style={{ width: '72%', gap: 18 }}>
         <BBButton title="Chose Quiz" onPress={onChoose} />
-        <BBButton title="Create Quiz" onPress={onCreate} />
+        <BBButton title="Create Quiz" onPress={onCreate} disabled />
       </View>
     </View>
   );

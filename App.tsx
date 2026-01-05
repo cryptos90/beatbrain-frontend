@@ -48,6 +48,12 @@ function shuffle<T>(arr: T[]) {
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = Math.min(340, SCREEN_W * 0.78);
 
+const HEADER_PAD_TOP = 54;         
+const BACK_BTN_SIZE = 56;          
+const LOGO_SIZE = 200;             
+const BUTTON_HEIGHT = 56;          
+
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'start' });
 
@@ -111,7 +117,7 @@ export default function App() {
     // Später: Spotify Remote -> play(correct.spotifyUri)
   }
 
-  const canStartQuiz = useMemo(() => (tracks ? tracks.length >= 4 : false), [tracks]);
+  const canStartQuiz = useMemo(() => !!tracks && tracks.length > 0, [tracks]);
 
   // When playlist changes while on choose screen, load matching mock tracks
   useEffect(() => {
@@ -214,10 +220,6 @@ export default function App() {
               );
             }}
           />
-
-          <Text style={{ textAlign: 'center', marginTop: 6, opacity: 0.7, color: Colors.textOnBg }}>
-            Swipe anywhere • Hold to pause
-          </Text>
         </View>
 
         {/* ✅ Start button pinned below gallery */}
@@ -237,11 +239,6 @@ export default function App() {
             </View>
           )}
 
-          {!loadingTracks && !canStartQuiz && (
-            <Text style={{ textAlign: 'center', marginTop: 10, opacity: 0.7, color: Colors.textOnBg }}>
-              Not enough tracks for a quiz.
-            </Text>
-          )}
         </View>
       </View>
     );
