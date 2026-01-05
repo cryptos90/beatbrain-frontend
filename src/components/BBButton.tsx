@@ -1,42 +1,51 @@
-import React from 'react';
-import { Pressable, Text } from 'react-native';
-import { Colors, Radius, Spacing } from '../theme';
+import React from "react";
+import { Pressable, StyleSheet, Text, ViewStyle, TextStyle } from "react-native";
+import { Colors } from "../theme";
 
-export function BBButton({
-  title,
-  onPress,
-  style,
-  disabled,
-}: {
+type Props = {
   title: string;
   onPress: () => void;
   disabled?: boolean;
-  style?: any;
-}) {
+  style?: ViewStyle;
+  textStyle?: TextStyle;
+};
+
+export function BBButton({ title, onPress, disabled, style, textStyle }: Props) {
   return (
     <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        {
-          backgroundColor: Colors.navy,
-          paddingVertical: 18,
-          borderRadius: 999,
-          alignItems: 'center',
-          opacity: disabled ? 0.5 : 1,
-        },
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => [
+        styles.button,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
     >
-      <Text
-        style={{
-          color: Colors.textOnNavy,
-          fontSize: 22,
-          fontWeight: '600',
-        }}
-      >
+      <Text numberOfLines={1} style={[styles.text, textStyle]}>
         {title}
       </Text>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    // ✅ feste Größe, unabhängig vom Text
+    height: 56,
+    minHeight: 56,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.navy,
+  },
+  text: {
+    color: Colors.textOnNavy,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.45 },
+});
