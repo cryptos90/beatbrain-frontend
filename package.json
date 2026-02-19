@@ -4,6 +4,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
+    "start:lan": "expo start --lan --port 8081",
+    "start:tunnel": "expo start --tunnel --port 8081",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web"

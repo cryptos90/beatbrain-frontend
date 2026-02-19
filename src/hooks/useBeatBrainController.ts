@@ -14,7 +14,7 @@ import {
   SPOTIFY_REDIRECT_URI_WEB,
 } from "../config";
 import { PLAYLIST_IDS } from "../data/playlists";
-import type { ApiClientContext } from "../services/apiClient";
+import { ApiHttpError, type ApiClientContext } from "../services/apiClient";
 import {
   completeSpotifyCallback,
   consumeAuthResult,
@@ -123,6 +123,9 @@ export function useBeatBrainController() {
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [playlistRateLimitRemaining, setPlaylistRateLimitRemaining] = useState<number | null>(
+    null,
+  );
 
   const carouselRef = useRef<FlatList<PlaylistCard>>(null);
 
@@ -161,6 +164,9 @@ export function useBeatBrainController() {
     new Map<string, Promise<PlaylistCard[]>>(),
   );
   const chooseResolveCacheRef = useRef(new Map<string, PlaylistCard[]>());
+  const chooseResolveRateLimitTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
@@ -365,6 +371,13 @@ export function useBeatBrainController() {
       return;
     }
 
+    if (playlistRateLimitRemaining && playlistRateLimitRemaining > 0) {
+      setPlaylistError(
+        `Spotify rate-limited. Try again in ${playlistRateLimitRemaining}s.`,
+      );
+      return;
+    }
+
     if (chooseResolveAbortRef.current) {
       chooseResolveAbortRef.current.abort();
     }
@@ -392,6 +405,11 @@ export function useBeatBrainController() {
         throw new Error("No Spotify playlists configured");
       }
 
+      if (chooseResolveRateLimitTimerRef.current) {
+        clearInterval(chooseResolveRateLimitTimerRef.current);
+        chooseResolveRateLimitTimerRef.current = null;
+      }
+      setPlaylistRateLimitRemaining(null);
       chooseResolveCacheRef.current.set(requestKey, next);
       setPlaylists(next);
       setSelectedPlaylistIndex(0);
@@ -399,6 +417,51 @@ export function useBeatBrainController() {
       if (error?.name === "AbortError") {
         return;
       }
+
+      if (error instanceof ApiHttpError && error.status === 429) {
+        const retryAfterRaw = error.retryAfterSeconds;
+        const retryAfterSeconds =
+          typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw) && retryAfterRaw > 0
+            ? Math.ceil(retryAfterRaw)
+            : 60;
+
+        if (chooseResolveRateLimitTimerRef.current) {
+          clearInterval(chooseResolveRateLimitTimerRef.current);
+          chooseResolveRateLimitTimerRef.current = null;
+        }
+
+        setPlaylistRateLimitRemaining(retryAfterSeconds);
+        setPlaylistError(`Spotify rate-limited. Try again in ${retryAfterSeconds}s.`);
+
+        chooseResolveRateLimitTimerRef.current = setInterval(() => {
+          setPlaylistRateLimitRemaining((previous) => {
+            if (previous === null || previous <= 1) {
+              if (chooseResolveRateLimitTimerRef.current) {
+                clearInterval(chooseResolveRateLimitTimerRef.current);
+                chooseResolveRateLimitTimerRef.current = null;
+              }
+              setPlaylistError((current) =>
+                current?.startsWith("Spotify rate-limited.") ? null : current,
+              );
+              return null;
+            }
+
+            const nextRemaining = previous - 1;
+            setPlaylistError(
+              `Spotify rate-limited. Try again in ${nextRemaining}s.`,
+            );
+            return nextRemaining;
+          });
+        }, 1000);
+
+        if (__DEV__) {
+          console.warn(
+            `[resolve] rate_limited playlistIds=${requestKey} retry_after=${retryAfterSeconds}s`,
+          );
+        }
+        return;
+      }
+
       setPlaylistError("Playlists konnten nicht von Spotify geladen werden.");
     } finally {
       const inFlight = chooseResolveInFlightRef.current.get(requestKey);
@@ -674,6 +737,10 @@ export function useBeatBrainController() {
         chooseResolveAbortRef.current.abort();
         chooseResolveAbortRef.current = null;
       }
+      if (chooseResolveRateLimitTimerRef.current) {
+        clearInterval(chooseResolveRateLimitTimerRef.current);
+        chooseResolveRateLimitTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -779,6 +846,4 @@ export function useBeatBrainController() {
 }
 
 export type BeatBrainController = ReturnType<typeof useBeatBrainController>;
-
-
 

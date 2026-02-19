@@ -80,7 +80,7 @@ export async function requestJson(
 
   if (!response.ok) {
     const retryAfterHeader = response.headers.get("Retry-After");
-    const retryAfterSeconds = retryAfterHeader
+    const retryAfterFromHeader = retryAfterHeader
       ? Number.parseInt(retryAfterHeader, 10)
       : undefined;
     const text = await response.text();
@@ -90,6 +90,19 @@ export async function requestJson(
     } catch {
       parsedBody = undefined;
     }
+
+    const retryAfterFromBody =
+      typeof parsedBody?.retryAfterSeconds === "number"
+        ? parsedBody.retryAfterSeconds
+        : typeof parsedBody?.error?.retryAfterSeconds === "number"
+          ? parsedBody.error.retryAfterSeconds
+          : undefined;
+    const retryAfterSeconds =
+      typeof retryAfterFromHeader === "number" && Number.isFinite(retryAfterFromHeader)
+        ? retryAfterFromHeader
+        : typeof retryAfterFromBody === "number" && Number.isFinite(retryAfterFromBody)
+          ? retryAfterFromBody
+          : undefined;
 
     const message =
       parsedBody?.error?.message ||
