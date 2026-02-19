@@ -56,10 +56,12 @@ export async function consumeAuthResult(authCode: string) {
 export async function resolveChoosePlaylists(
   context: ApiClientContext,
   playlistIds: string[],
+  options?: { signal?: AbortSignal },
 ): Promise<PlaylistCard[]> {
   const payload = await requestJson(context, "/spotify/playlists/resolve", {
     method: "POST",
     body: JSON.stringify({ playlistIds }),
+    signal: options?.signal,
   });
 
   return (payload.playlists ?? []).map((playlist: any) => ({

@@ -156,6 +156,11 @@ export function useBeatBrainController() {
   const [mpHostPlaylistId, setMpHostPlaylistId] = useState(PLAYLIST_IDS[0]?.id ?? "");
   const [mpHostQuizSessionId, setMpHostQuizSessionId] = useState<string | null>(null);
   const [mpYearAnswer, setMpYearAnswer] = useState("");
+  const chooseResolveAbortRef = useRef<AbortController | null>(null);
+  const chooseResolveInFlightRef = useRef(
+    new Map<string, Promise<PlaylistCard[]>>(),
+  );
+  const chooseResolveCacheRef = useRef(new Map<string, PlaylistCard[]>());
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
@@ -334,24 +339,75 @@ export function useBeatBrainController() {
 
   const loadChoosePlaylists = async () => {
     if (!hasAuth) return;
+    const playlistIds = PLAYLIST_IDS.map((p) => p.id);
+    const requestKey = playlistIds.join(",");
+
+    const cached = chooseResolveCacheRef.current.get(requestKey);
+    if (cached && cached.length) {
+      if (__DEV__) {
+        console.info(
+          `[resolve] start playlistIds=${requestKey} source=cache`,
+        );
+      }
+      setPlaylists(cached);
+      setSelectedPlaylistIndex(0);
+      setPlaylistError(null);
+      setPlaylistLoading(false);
+      return;
+    }
+
+    if (chooseResolveInFlightRef.current.has(requestKey)) {
+      if (__DEV__) {
+        console.info(
+          `[resolve] dedupe playlistIds=${requestKey} source=in-flight`,
+        );
+      }
+      return;
+    }
+
+    if (chooseResolveAbortRef.current) {
+      chooseResolveAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    chooseResolveAbortRef.current = abortController;
 
     setPlaylistLoading(true);
     setPlaylistError(null);
-    try {
-      const next = await resolveChoosePlaylists(
-        apiContext,
-        PLAYLIST_IDS.map((p) => p.id),
+    if (__DEV__) {
+      console.info(
+        `[resolve] start playlistIds=${requestKey} source=network`,
       );
+    }
+    const requestPromise = resolveChoosePlaylists(
+      apiContext,
+      playlistIds,
+      { signal: abortController.signal },
+    );
+    chooseResolveInFlightRef.current.set(requestKey, requestPromise);
+
+    try {
+      const next = await requestPromise;
 
       if (!next.length) {
         throw new Error("No Spotify playlists configured");
       }
 
+      chooseResolveCacheRef.current.set(requestKey, next);
       setPlaylists(next);
       setSelectedPlaylistIndex(0);
-    } catch {
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        return;
+      }
       setPlaylistError("Playlists konnten nicht von Spotify geladen werden.");
     } finally {
+      const inFlight = chooseResolveInFlightRef.current.get(requestKey);
+      if (inFlight === requestPromise) {
+        chooseResolveInFlightRef.current.delete(requestKey);
+      }
+      if (chooseResolveAbortRef.current === abortController) {
+        chooseResolveAbortRef.current = null;
+      }
       setPlaylistLoading(false);
     }
   };
@@ -607,10 +663,19 @@ export function useBeatBrainController() {
   }, [pendingAuthState]);
 
   useEffect(() => {
-    if (screen.name === "choose") {
-      loadChoosePlaylists();
+    if (screen.name === "choose" && hasAuth) {
+      void loadChoosePlaylists();
     }
-  }, [screen.name, hostJwt]);
+  }, [screen.name, hasAuth]);
+
+  useEffect(() => {
+    return () => {
+      if (chooseResolveAbortRef.current) {
+        chooseResolveAbortRef.current.abort();
+        chooseResolveAbortRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (screen.name === "quiz" && quizSessionId) {
@@ -714,7 +779,6 @@ export function useBeatBrainController() {
 }
 
 export type BeatBrainController = ReturnType<typeof useBeatBrainController>;
-
 
 
 
