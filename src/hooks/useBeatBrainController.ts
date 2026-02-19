@@ -1,3 +1,4 @@
+// BB_CONTROLLER_OK
 import { Audio } from "expo-av";
 import { Asset } from "expo-asset";
 import * as SecureStore from "expo-secure-store";
@@ -25,6 +26,8 @@ import {
 } from "../services/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../services/authStorage";
 import type { LobbyState, PlaylistCard, QuizQuestion, Screen } from "../types/app";
+
+console.log("BB_CONTROLLER_VERSION", "FIX-2026-02-19-2030");
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -55,19 +58,19 @@ function resolveSpotifyRedirectUri(platform: string): string {
     const protocol = parsed.protocol.toLowerCase();
     const host = parsed.hostname.toLowerCase();
     const path = parsed.pathname;
-
-    if (host === "localhost" || host.startsWith("192.168.")) {
-      if (__DEV__) {
-        console.warn(
-          `[auth] blocked EXPO_PUBLIC_SPOTIFY_REDIRECT_URI_WEB host (${host}), fallback=${SPOTIFY_REDIRECT_URI_WEB_FALLBACK}`,
-        );
-      }
-      return SPOTIFY_REDIRECT_URI_WEB_FALLBACK;
-    }
+    const isLoopbackHost =
+      host === "127.0.0.1" || host === "::1" || host === "[::1]";
+    const isLanHost =
+      host.startsWith("192.168.") ||
+      host.startsWith("10.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+    const isDevAllowedHost =
+      isLoopbackHost || (__DEV__ && (host === "localhost" || isLanHost));
 
     if (protocol === "http:") {
-      const isLoopback = host === "127.0.0.1" || host === "::1" || host === "[::1]";
-      if (!(isLoopback && path === "/auth/spotify/callback")) {
+      const isValidHttpPath =
+        path === "/auth/spotify/callback" || path.endsWith("/callback");
+      if (!(isDevAllowedHost && isValidHttpPath)) {
         if (__DEV__) {
           console.warn(
             `[auth] invalid HTTP EXPO_PUBLIC_SPOTIFY_REDIRECT_URI_WEB (${value}), fallback=${SPOTIFY_REDIRECT_URI_WEB_FALLBACK}`,
@@ -631,11 +634,6 @@ export function useBeatBrainController() {
 
   useEffect(() => {
     if (!__DEV__) return;
-    console.log("BB_CONTROLLER_VERSION", "2026-02-19-1929");
-  }, []);
-
-  useEffect(() => {
-    if (!__DEV__) return;
     console.info(
       `[auth] configured redirect_uri mobile=${SPOTIFY_REDIRECT_URI} web=${SPOTIFY_REDIRECT_URI_WEB}`,
     );
@@ -716,8 +714,6 @@ export function useBeatBrainController() {
 }
 
 export type BeatBrainController = ReturnType<typeof useBeatBrainController>;
-
-
 
 
 

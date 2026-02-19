@@ -1,0 +1,13 @@
+env: load .env
+env: export EXPO_PUBLIC_SPOTIFY_CLIENT_ID EXPO_PUBLIC_SPOTIFY_REDIRECT_URI EXPO_PUBLIC_SPOTIFY_REDIRECT_URI_WEB EXPO_PUBLIC_API_BASE_URL
+Starting project at H:\OneDrive\Projekte\Beat Brain\BeatBrain\beatbrain-frontend
+Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web Bundled 449ms index.ts (386 modules)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 38ms index.ts (1 module)
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 39ms index.ts (1 module)
