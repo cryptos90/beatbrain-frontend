@@ -2,6 +2,7 @@
   "expo": {
     "name": "beatbrain-frontend",
     "slug": "beatbrain-frontend",
+    "scheme": "beatbrain-login",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
