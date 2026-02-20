@@ -1,6 +1,7 @@
 import Slider from "@react-native-community/slider";
 import React from "react";
-import { ActivityIndicator, Image, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
+import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
 import { Colors } from "../../theme";
 
@@ -15,10 +16,12 @@ type Props = {
   onQuestionCountChange: (value: number) => void;
 };
 
-const HEADER_PAD_TOP = 54;
-const BACK_BTN_SIZE = 56;
-const LOGO_SIZE = 200;
 const BUTTON_DROP = 56 * 2;
+
+function normalizeQuestionCount(value: number) {
+  const clamped = Math.max(10, Math.min(100, value));
+  return Math.max(10, Math.min(100, Math.round(clamped / 10) * 10));
+}
 
 export function SinglePlayerMenu({
   onBack,
@@ -34,28 +37,7 @@ export function SinglePlayerMenu({
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <View style={{ paddingTop: HEADER_PAD_TOP, paddingHorizontal: 16 }}>
-        <View style={{ height: BACK_BTN_SIZE, justifyContent: "flex-start", alignItems: "flex-start" }}>
-          <BBButton
-            title="<-"
-            onPress={onBack}
-            style={{
-              width: BACK_BTN_SIZE,
-              height: BACK_BTN_SIZE,
-              paddingHorizontal: 0,
-              justifyContent: "center",
-            }}
-          />
-        </View>
-
-        <View style={{ alignItems: "center" }}>
-          <Image
-            source={require("../../../assets/logo.png")}
-            resizeMode="contain"
-            style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
-          />
-        </View>
-      </View>
+      <AppHeader onBack={onBack} />
 
       <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: BUTTON_DROP, gap: 14 }}>
         {waitingForLogin ? (
@@ -111,12 +93,15 @@ export function SinglePlayerMenu({
               <Slider
                 minimumValue={10}
                 maximumValue={100}
-                step={1}
+                step={10}
                 value={questionCount}
                 minimumTrackTintColor={Colors.navy}
                 maximumTrackTintColor="rgba(15, 23, 42, 0.2)"
                 thumbTintColor={Colors.navy}
-                onValueChange={(value) => onQuestionCountChange(Math.round(value))}
+                onValueChange={(value) => onQuestionCountChange(normalizeQuestionCount(value))}
+                onSlidingComplete={(value) =>
+                  onQuestionCountChange(normalizeQuestionCount(value))
+                }
               />
             </View>
 

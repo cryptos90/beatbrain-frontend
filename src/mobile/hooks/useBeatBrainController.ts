@@ -1,4 +1,5 @@
 import { Asset } from "expo-asset";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,9 +31,14 @@ WebBrowser.maybeCompleteAuthSession();
 const MAX_AVATAR_DATA_URL_LENGTH = 200_000;
 const MIN_QUESTION_COUNT = 10;
 const MAX_QUESTION_COUNT = 100;
+const QUESTION_COUNT_STEP = 10;
+const NATIVE_SPOTIFY_REDIRECT_URI_FALLBACK = "beatbrain-login://callback";
 
 function clampQuestionCount(value: number) {
-  return Math.max(MIN_QUESTION_COUNT, Math.min(MAX_QUESTION_COUNT, Math.round(value)));
+  const normalized = Number.isFinite(value) ? value : MIN_QUESTION_COUNT;
+  const clamped = Math.max(MIN_QUESTION_COUNT, Math.min(MAX_QUESTION_COUNT, normalized));
+  const rounded = Math.round(clamped / QUESTION_COUNT_STEP) * QUESTION_COUNT_STEP;
+  return Math.max(MIN_QUESTION_COUNT, Math.min(MAX_QUESTION_COUNT, rounded));
 }
 
 function resolveSpotifyRedirectUri(platform: string): string {
@@ -60,11 +66,47 @@ function resolveSpotifyRedirectUri(platform: string): string {
     }
   }
 
-  if (SPOTIFY_REDIRECT_URI !== "beatbrain-login://callback") {
-    throw new Error("Invalid EXPO_PUBLIC_SPOTIFY_REDIRECT_URI. Use beatbrain-login://callback.");
+  const nativeRedirect = SPOTIFY_REDIRECT_URI.trim();
+  if (nativeRedirect !== NATIVE_SPOTIFY_REDIRECT_URI_FALLBACK) {
+    if (__DEV__) {
+      console.warn(
+        `[auth] invalid EXPO_PUBLIC_SPOTIFY_REDIRECT_URI (${nativeRedirect || "<empty>"}), fallback=${NATIVE_SPOTIFY_REDIRECT_URI_FALLBACK}`,
+      );
+    }
+    return NATIVE_SPOTIFY_REDIRECT_URI_FALLBACK;
   }
 
-  return SPOTIFY_REDIRECT_URI;
+  return nativeRedirect;
+}
+
+async function buildAvatarDataUrlFromAssetUri(assetUri: string) {
+  const attempts = [
+    { size: 256, compress: 0.55 },
+    { size: 192, compress: 0.45 },
+  ];
+
+  for (const attempt of attempts) {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      assetUri,
+      [{ resize: { width: attempt.size, height: attempt.size } }],
+      {
+        compress: attempt.compress,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      },
+    );
+
+    if (!manipulated.base64) {
+      continue;
+    }
+
+    const dataUrl = `data:image/jpeg;base64,${manipulated.base64}`;
+    if (dataUrl.length <= MAX_AVATAR_DATA_URL_LENGTH) {
+      return dataUrl;
+    }
+  }
+
+  return null;
 }
 
 function readQueryParam(url: string, key: string) {
@@ -325,8 +367,7 @@ export function useBeatBrainController() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
+        quality: 0.8,
       };
 
       const result =
@@ -342,16 +383,14 @@ export function useBeatBrainController() {
       }
 
       const asset = result.assets?.[0];
-      const base64 = asset?.base64;
-      if (!base64) {
+      const assetUri = typeof asset?.uri === "string" ? asset.uri : "";
+      if (!assetUri) {
         setMpJoinError("Could not process selected photo.");
         return;
       }
 
-      const mimeType =
-        asset?.mimeType && asset.mimeType.startsWith("image/") ? asset.mimeType : "image/jpeg";
-      const dataUrl = `data:${mimeType};base64,${base64}`;
-      if (dataUrl.length > MAX_AVATAR_DATA_URL_LENGTH) {
+      const dataUrl = await buildAvatarDataUrlFromAssetUri(assetUri);
+      if (!dataUrl) {
         setMpJoinError("Avatar too large.");
         return;
       }
@@ -487,8 +526,13 @@ export function useBeatBrainController() {
       setPendingAuthState(null);
       setAuthError(null);
       setLoginPending(false);
-    } catch {
-      setAuthError("Spotify login failed.");
+    } catch (error) {
+      if (__DEV__) {
+        console.error("[auth] login failed", error);
+      }
+      const message =
+        error instanceof Error && error.message ? error.message : "Spotify login failed.";
+      setAuthError(message);
       setLoginPending(false);
       setPendingAuthState(null);
     } finally {
@@ -502,8 +546,13 @@ export function useBeatBrainController() {
     setAuthError(null);
 
     try {
+      console.log("[auth] startSpotifyLogin begin");
+      console.log("[auth] API_BASE_URL", API_BASE_URL);
+
       const clientType = Platform.OS === "web" ? "web" : "mobile";
       const redirectUri = resolveSpotifyRedirectUri(Platform.OS);
+      const backendStartUrl = `${API_BASE_URL}/auth/spotify/start?client=${encodeURIComponent(clientType)}`;
+      console.log("[auth] calling backend start url=", backendStartUrl);
 
       const data = await startSpotifyAuth(clientType, {
         redirectOrigin: Platform.OS === "web" ? window.location.origin : undefined,
@@ -517,7 +566,9 @@ export function useBeatBrainController() {
         throw new Error("Spotify authorize URL missing");
       }
 
+      console.log("[auth] opening auth session", data.authorizeUrl);
       const authResult = await WebBrowser.openAuthSessionAsync(data.authorizeUrl, authReturnUrl);
+      console.log("[auth] auth session result", authResult);
       if (authResult.type === "success" && authResult.url) {
         await handleAuthRedirect(authResult.url);
         return;
@@ -529,8 +580,18 @@ export function useBeatBrainController() {
 
       setLoginPending(false);
       setPendingAuthState(null);
-    } catch {
-      setAuthError("Spotify login failed.");
+    } catch (error) {
+      if (__DEV__) {
+        console.error("[auth] login failed", error);
+        try {
+          console.error("[auth] login failed details", JSON.stringify(error));
+        } catch {
+          // ignore json stringify errors
+        }
+      }
+      setAuthError(
+        error instanceof Error ? error.message || "Login fehlgeschlagen" : String(error),
+      );
       setLoginPending(false);
       setPendingAuthState(null);
     } finally {
