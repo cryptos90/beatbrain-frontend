@@ -12,7 +12,10 @@ import {
   SPOTIFY_REDIRECT_URI_WEB,
   SPOTIFY_REDIRECT_URI_WEB_FALLBACK,
 } from "../../shared/config";
-import { CURATED_PLAYLISTS } from "../../shared/data/curatedPlaylists";
+import {
+  buildPlaylistPlaceholders,
+  CURATED_PLAYLIST_IDS,
+} from "../../shared/data/curatedPlaylists";
 import { ApiHttpError, type ApiClientContext } from "../../shared/net/apiClient";
 import {
   completeSpotifyCallback,
@@ -20,6 +23,7 @@ import {
   createQuizSession,
   deleteQuizSession,
   loadNextQuizQuestion,
+  resolveChoosePlaylists,
   startSpotifyAuth,
   startSpotifyPlayback,
 } from "../../shared/net/beatbrainApi";
@@ -132,6 +136,23 @@ function readJoinCode(url: string) {
   return normalized || null;
 }
 
+async function checkBackendHealth(apiBase: string, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${apiBase}/health`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 function toPlaybackErrorMessage(error: unknown) {
   if (error instanceof ApiHttpError) {
     if (error.message) {
@@ -167,7 +188,9 @@ export function useBeatBrainController() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [pendingAuthState, setPendingAuthState] = useState<string | null>(null);
 
-  const playlists = CURATED_PLAYLISTS;
+  const [playlists, setPlaylists] = useState<PlaylistCard[]>(() =>
+    buildPlaylistPlaceholders(),
+  );
   const [selectedPlaylistIndex, setSelectedPlaylistIndex] = useState(0);
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
   const [playlistIdInput, setPlaylistIdInput] = useState("");
@@ -335,6 +358,30 @@ export function useBeatBrainController() {
       setMpTimeUp(false);
       setMpAllContinued(false);
       setScreen({ name: "multiplayerResults" });
+    });
+
+    socket.on("game:restarted", (state: LobbyState) => {
+      setMpLobby(state);
+      setMpQuestion(null);
+      setMpCorrectAnswer(null);
+      setMpPlayerAnswered(false);
+      setMpPlayerContinued(false);
+      setMpAllAnswered(false);
+      setMpTimeUp(false);
+      setMpAllContinued(false);
+      setScreen({ name: "multiplayerQuiz" });
+    });
+
+    socket.on("session:returnedToMenu", (state: LobbyState) => {
+      setMpLobby(state);
+      setMpQuestion(null);
+      setMpCorrectAnswer(null);
+      setMpPlayerAnswered(false);
+      setMpPlayerContinued(false);
+      setMpAllAnswered(false);
+      setMpTimeUp(false);
+      setMpAllContinued(false);
+      setScreen({ name: "multiplayerQuiz" });
     });
 
     socket.on("exception", (payload: any) => {
@@ -550,6 +597,16 @@ export function useBeatBrainController() {
     setAuthError(null);
 
     try {
+      const backendHealthy = await checkBackendHealth(API_BASE_URL);
+      if (!backendHealthy) {
+        setAuthError(
+          `Backend nicht erreichbar: ${API_BASE_URL}. Bitte start-backend.bat ausführen.`,
+        );
+        setAuthBusy(false);
+        setLoginPending(false);
+        return;
+      }
+
       console.log("[auth] startSpotifyLogin begin");
       console.log("[auth] API_BASE_URL", API_BASE_URL);
 
@@ -558,9 +615,20 @@ export function useBeatBrainController() {
       const backendStartUrl = `${API_BASE_URL}/auth/spotify/start?client=${encodeURIComponent(clientType)}`;
       console.log("[auth] calling backend start url=", backendStartUrl);
 
-      const data = await startSpotifyAuth(clientType, {
-        redirectOrigin: Platform.OS === "web" ? window.location.origin : undefined,
-      });
+      let data;
+      try {
+        data = await startSpotifyAuth(clientType, {
+          redirectOrigin: Platform.OS === "web" ? window.location.origin : undefined,
+        });
+      } catch (error) {
+        if (__DEV__) {
+          console.error("[auth] start endpoint failed", error);
+        }
+        setAuthError(`Network request failed calling ${backendStartUrl}. Backend läuft?`);
+        setLoginPending(false);
+        setPendingAuthState(null);
+        return;
+      }
       const expectedState = typeof data.state === "string" ? data.state : "";
 
       const serverRedirectUri = typeof data.redirectUri === "string" ? data.redirectUri : redirectUri;
@@ -806,6 +874,56 @@ export function useBeatBrainController() {
 
     void hydrateAuth();
   }, []);
+
+  useEffect(() => {
+    if (!hasAuth || screen.name !== "choose") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPlaylists = async () => {
+      try {
+        const resolved = await resolveChoosePlaylists(apiContext, [...CURATED_PLAYLIST_IDS]);
+        if (cancelled) {
+          return;
+        }
+
+        if (!resolved.length) {
+          setPlaylistError("Keine Playlists gefunden.");
+          setPlaylists(buildPlaylistPlaceholders());
+          return;
+        }
+
+        setPlaylists(resolved);
+        setSelectedPlaylistIndex((index) =>
+          Math.max(0, Math.min(index, resolved.length - 1)),
+        );
+        setPlaylistError(null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        if (__DEV__) {
+          console.error("[choose] playlist resolve failed", error);
+        }
+
+        const message =
+          error instanceof ApiHttpError
+            ? error.message || "Playlists konnten nicht geladen werden."
+            : "Playlists konnten nicht geladen werden.";
+        setPlaylistError(message);
+        setPlaylists(buildPlaylistPlaceholders());
+      }
+    };
+
+    void loadPlaylists();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiContext, hasAuth, screen.name]);
 
   useEffect(() => {
     if (Platform.OS !== "web") {

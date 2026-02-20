@@ -1,5 +1,4 @@
 import { API_BASE_URL } from "../config";
-import { CURATED_PLAYLISTS } from "../data/curatedPlaylists";
 import type { PlaylistCard } from "../types/app";
 import type { ApiClientContext, JsonRecord } from "./apiClient";
 import { requestJson } from "./apiClient";
@@ -52,14 +51,36 @@ export async function consumeAuthResult(authCode: string) {
 }
 
 export async function resolveChoosePlaylists(
-  _context: ApiClientContext,
+  context: ApiClientContext,
   playlistIds: string[],
 ): Promise<PlaylistCard[]> {
-  const normalized = new Set(playlistIds.map((id) => id.trim()).filter(Boolean));
-  if (!normalized.size) {
-    return [...CURATED_PLAYLISTS];
+  const orderedIds = [...new Set(playlistIds.map((id) => id.trim()).filter(Boolean))];
+  if (!orderedIds.length) {
+    return [];
   }
-  return CURATED_PLAYLISTS.filter((playlist) => normalized.has(playlist.id));
+
+  const payload = await requestJson(context, "/spotify/playlists/resolve", {
+    method: "POST",
+    body: JSON.stringify({
+      playlistIds: orderedIds,
+    }),
+  });
+
+  const resolved = Array.isArray(payload.playlists) ? payload.playlists : [];
+  const byId = new Map<string, PlaylistCard>();
+  for (const entry of resolved) {
+    const id = String(entry?.id ?? "").trim();
+    if (!id) {
+      continue;
+    }
+    byId.set(id, {
+      id,
+      title: String(entry?.title ?? id),
+      imageUrl: String(entry?.imageUrl ?? ""),
+    });
+  }
+
+  return orderedIds.map((id) => byId.get(id) ?? { id, title: id, imageUrl: "" });
 }
 
 export async function getPlaylistById(context: ApiClientContext, playlistId: string) {
@@ -107,4 +128,3 @@ export async function deleteQuizSession(context: ApiClientContext, sessionId: st
     method: "DELETE",
   });
 }
-
