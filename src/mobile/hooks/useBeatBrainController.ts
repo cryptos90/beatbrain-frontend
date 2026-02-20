@@ -116,7 +116,11 @@ function readQueryParam(url: string, key: string) {
 }
 
 function readAuthCode(url: string) {
-  return readQueryParam(url, "auth_code");
+  return readQueryParam(url, "code") ?? readQueryParam(url, "auth_code");
+}
+
+function readState(url: string) {
+  return readQueryParam(url, "state");
 }
 
 function readJoinCode(url: string) {
@@ -473,9 +477,9 @@ export function useBeatBrainController() {
 
   const handleAuthRedirect = async (url: string) => {
     try {
-      const authCode = readAuthCode(url);
+      const authCode = readQueryParam(url, "auth_code");
       const code = readQueryParam(url, "code");
-      const state = readQueryParam(url, "state");
+      const state = readState(url);
       const oauthError = readQueryParam(url, "error");
       const joinCode = readJoinCode(url);
 
@@ -557,20 +561,75 @@ export function useBeatBrainController() {
       const data = await startSpotifyAuth(clientType, {
         redirectOrigin: Platform.OS === "web" ? window.location.origin : undefined,
       });
+      const expectedState = typeof data.state === "string" ? data.state : "";
 
       const serverRedirectUri = typeof data.redirectUri === "string" ? data.redirectUri : redirectUri;
       const authReturnUrl = Platform.OS === "web" ? window.location.origin : serverRedirectUri;
 
-      setPendingAuthState(data.state ?? null);
+      setPendingAuthState(expectedState || null);
       if (!data.authorizeUrl) {
         throw new Error("Spotify authorize URL missing");
       }
 
       console.log("[auth] opening auth session", data.authorizeUrl);
       const authResult = await WebBrowser.openAuthSessionAsync(data.authorizeUrl, authReturnUrl);
-      console.log("[auth] auth session result", authResult);
+      console.log(`[auth] auth session result type=${authResult.type}`);
       if (authResult.type === "success" && authResult.url) {
-        await handleAuthRedirect(authResult.url);
+        const code = readAuthCode(authResult.url);
+        const returnedState = readState(authResult.url);
+        const stateMatches =
+          expectedState && returnedState ? returnedState === expectedState : true;
+        if (__DEV__) {
+          const codeLength = code?.length ?? 0;
+          console.log(
+            `[auth] redirect parsed codePresent=${Boolean(code)} codeLen=${codeLength} statePresent=${Boolean(returnedState)} stateMatch=${stateMatches}`,
+          );
+        }
+
+        if (!code) {
+          setAuthError("Login fehlgeschlagen: Kein Code in Redirect-URL.");
+          setLoginPending(false);
+          setPendingAuthState(null);
+          return;
+        }
+
+        if (expectedState && returnedState && returnedState !== expectedState) {
+          setAuthError("Login fehlgeschlagen: State mismatch.");
+          setLoginPending(false);
+          setPendingAuthState(null);
+          return;
+        }
+
+        const exchange = await completeSpotifyCallback(
+          code,
+          returnedState ?? expectedState ?? "",
+        );
+        let appJwt: string | null = null;
+        let resolvedViaConsume = false;
+
+        if (typeof exchange.appJwt === "string" && exchange.appJwt.trim()) {
+          appJwt = exchange.appJwt.trim();
+        } else if (typeof exchange.authCode === "string" && exchange.authCode.trim()) {
+          const auth = await consumeAuthResult(exchange.authCode);
+          if (typeof auth.appJwt === "string" && auth.appJwt.trim()) {
+            appJwt = auth.appJwt.trim();
+          }
+          resolvedViaConsume = true;
+        }
+
+        if (!appJwt) {
+          throw new Error("Login abgeschlossen, aber Backend lieferte kein appJwt/authCode.");
+        }
+
+        setPersistedHostJwt(appJwt);
+        if (__DEV__) {
+          const exchangeMode = resolvedViaConsume ? "consumeAuthResult" : "exchange";
+          console.log(`[auth] ${exchangeMode} ok jwtSet=${Boolean(appJwt)}`);
+        }
+        setAuthError(null);
+        setLoginPending(false);
+        setPendingAuthState(null);
+        setScreen({ name: "singleMenu" });
         return;
       }
 
