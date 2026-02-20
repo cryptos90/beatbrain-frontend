@@ -8,6 +8,7 @@ import type { QuizQuestion } from "../types/app";
 type Props = {
   currentQuestion: QuizQuestion | null;
   qIndex: number;
+  playbackError: string | null;
   revealed: boolean;
   pickedOption: string | null;
   yearInput: string;
@@ -25,6 +26,7 @@ type Props = {
 export function QuizView({
   currentQuestion,
   qIndex,
+  playbackError,
   revealed,
   pickedOption,
   yearInput,
@@ -65,6 +67,23 @@ export function QuizView({
       <Text style={{ fontSize: 18, fontWeight: "800", color: Colors.textOnBg, textAlign: "center", marginTop: 10 }}>
         Question {qIndex + 1}/{QUESTIONS_PER_QUIZ}
       </Text>
+
+      {!!playbackError && (
+        <View
+          style={{
+            marginHorizontal: 18,
+            marginTop: 10,
+            backgroundColor: "#fef3c7",
+            borderRadius: 10,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Text style={{ color: "#92400e", fontSize: 13, fontWeight: "700", textAlign: "center" }}>
+            {playbackError}
+          </Text>
+        </View>
+      )}
 
       <View style={{ paddingHorizontal: 18, marginTop: 10 }}>
         <View
@@ -197,6 +216,15 @@ export function QuizView({
               }}
             >
               <Text style={{ color: Colors.textOnNavy, fontSize: 28, fontWeight: "800" }}>Song Info</Text>
+
+              <View style={{ height: 12 }} />
+
+              {!!currentQuestion.trackInfo.coverUrl && (
+                <Image
+                  source={{ uri: currentQuestion.trackInfo.coverUrl }}
+                  style={{ width: 120, height: 120, borderRadius: 12 }}
+                />
+              )}
 
               <View style={{ height: 12 }} />
 

@@ -36,7 +36,7 @@ export function AppRouter({ app }: Props) {
 
   if (app.screen.name === "multiplayer") {
     const joinUrl = app.mpLobby?.joinCode
-      ? `beatbrain-login://join?code=${app.mpLobby.joinCode}`
+      ? `beatbrain-login://join?joinCode=${app.mpLobby.joinCode}`
       : "";
 
     return (
@@ -51,10 +51,18 @@ export function AppRouter({ app }: Props) {
           mpQuestion={app.mpQuestion}
           mpCorrectAnswer={app.mpCorrectAnswer}
           mpJoinCodeInput={app.mpJoinCodeInput}
+          mpJoinError={app.mpJoinError}
           mpPlayerName={app.mpPlayerName}
-          mpPlayerIcon={app.mpPlayerIcon}
+          mpPlayerAvatarDataUrl={app.mpPlayerAvatarDataUrl}
           mpHostPlaylistId={app.mpHostPlaylistId}
           mpYearAnswer={app.mpYearAnswer}
+          mpPlayerAnswered={app.mpPlayerAnswered}
+          mpPlayerContinued={app.mpPlayerContinued}
+          mpAllAnswered={app.mpAllAnswered}
+          mpTimeUp={app.mpTimeUp}
+          mpPlaybackError={app.mpPlaybackError}
+          mpReadyCount={app.mpReadyCount}
+          mpAllContinued={app.mpAllContinued}
           joinUrl={joinUrl}
           onBack={() => {
             if (app.mpRole !== "none") {
@@ -78,13 +86,15 @@ export function AppRouter({ app }: Props) {
           onReveal={app.hostReveal}
           onJoinCodeChange={app.setMpJoinCodeInput}
           onPlayerNameChange={app.setMpPlayerName}
-          onPlayerIconChange={app.setMpPlayerIcon}
+          onPickAvatarCamera={app.pickPlayerAvatarFromCamera}
+          onPickAvatarLibrary={app.pickPlayerAvatarFromLibrary}
           onJoinLobby={app.joinAsPlayer}
           onPlayerAnswer={(answer) => {
             if (app.mpRole === "player") {
               app.playerAnswer(answer);
             }
           }}
+          onPlayerContinue={app.playerContinue}
           onYearAnswerChange={(value) => app.setMpYearAnswer(value.replace(/[^\d]/g, ""))}
         />
       </>
@@ -173,6 +183,7 @@ export function AppRouter({ app }: Props) {
           yearWasCorrect={app.yearWasCorrect}
           timerAnim={app.timerAnim}
           timerBarW={app.timerBarW}
+          playbackError={app.quizPlaybackError}
           onTimerLayout={app.setTimerBarW}
           onBack={app.finishQuiz}
           onPickOption={app.onPickOption}

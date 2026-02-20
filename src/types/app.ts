@@ -13,15 +13,17 @@ export type QuestionObject = {
 export type QuizQuestion = {
   questionObject: QuestionObject;
   correctSongId: string;
+  correctTrackUri: string;
   correctAnswer: string;
   wrongAnswers: string[];
   options: string[];
-  trackPreviewUrl: string | null;
   trackInfo: {
     id: string;
+    uri: string;
     name: string;
     artist: string;
     album: string;
+    coverUrl: string;
     year: string;
     explicit: boolean;
     popularity: number;
@@ -40,15 +42,18 @@ export type Screen =
 export type LobbyPlayer = {
   id: string;
   name: string;
-  icon: string;
+  avatarDataUrl: string;
   score: number;
   answered: boolean;
   latestAnswer: string | null;
+  readyForNext: boolean;
 };
 
 export type LobbyState = {
   joinCode: string;
   status: "lobby" | "question" | "reveal" | "results";
+  currentQuestionId?: string | null;
+  roundDeadline?: number | null;
   players: LobbyPlayer[];
   maxPlayers: number;
 };

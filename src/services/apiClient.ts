@@ -27,6 +27,16 @@ export class ApiHttpError extends Error {
   }
 }
 
+function backendUnreachableError(baseUrl: string, error: unknown) {
+  const causeMessage =
+    error instanceof Error && error.message ? ` (${error.message})` : "";
+  return new ApiHttpError(
+    `Backend not reachable at ${baseUrl}. Is backend running on this host/port?${causeMessage}`,
+    0,
+    { details: { cause: error instanceof Error ? error.message : String(error) } },
+  );
+}
+
 export async function requestJson(
   context: ApiClientContext,
   path: string,
@@ -54,18 +64,28 @@ export async function requestJson(
   }
 
   const baseUrl = context.baseUrl ?? API_BASE_URL;
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    throw backendUnreachableError(baseUrl, error);
+  }
 
   if (response.status === 401 && retry && jwt) {
-    const refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-      },
-    });
+    let refreshResponse: Response;
+    try {
+      refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+    } catch (error) {
+      throw backendUnreachableError(baseUrl, error);
+    }
 
     if (refreshResponse.ok) {
       const refreshPayload = (await refreshResponse.json()) as JsonRecord;

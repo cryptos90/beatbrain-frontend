@@ -90,6 +90,20 @@ export async function loadNextQuizQuestion(context: ApiClientContext, sessionId:
   });
 }
 
+export async function startSpotifyPlayback(
+  context: ApiClientContext,
+  trackUri: string,
+  deviceId?: string,
+) {
+  return requestJson(context, "/spotify/playback/play", {
+    method: "POST",
+    body: JSON.stringify({
+      trackUri,
+      deviceId: deviceId ?? undefined,
+    }),
+  });
+}
+
 export async function deleteQuizSession(context: ApiClientContext, sessionId: string) {
   return requestJson(context, `/quiz/sessions/${sessionId}`, {
     method: "DELETE",
