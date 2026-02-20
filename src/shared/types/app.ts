@@ -6,6 +6,12 @@ export type PlaylistCard = {
   decadeTag?: string;
 };
 
+export type ChoosePlaylist = {
+  id: string;
+  name: string;
+  coverUrl: string;
+};
+
 export type QuestionObject = {
   questionText: string;
   answerFieldPath: string;

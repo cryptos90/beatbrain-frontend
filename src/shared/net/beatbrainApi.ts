@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import type { PlaylistCard } from "../types/app";
+import type { ChoosePlaylist } from "../types/app";
 import type { ApiClientContext, JsonRecord } from "./apiClient";
 import { requestJson } from "./apiClient";
 
@@ -50,37 +50,24 @@ export async function consumeAuthResult(authCode: string) {
   return (await response.json()) as JsonRecord;
 }
 
-export async function resolveChoosePlaylists(
+export async function getChoosePlaylists(
   context: ApiClientContext,
-  playlistIds: string[],
-): Promise<PlaylistCard[]> {
-  const orderedIds = [...new Set(playlistIds.map((id) => id.trim()).filter(Boolean))];
-  if (!orderedIds.length) {
+): Promise<ChoosePlaylist[]> {
+  const payload = (await requestJson(context, "/choose", {
+    method: "GET",
+  })) as unknown;
+
+  if (!Array.isArray(payload)) {
     return [];
   }
 
-  const payload = await requestJson(context, "/spotify/playlists/resolve", {
-    method: "POST",
-    body: JSON.stringify({
-      playlistIds: orderedIds,
-    }),
-  });
-
-  const resolved = Array.isArray(payload.playlists) ? payload.playlists : [];
-  const byId = new Map<string, PlaylistCard>();
-  for (const entry of resolved) {
-    const id = String(entry?.id ?? "").trim();
-    if (!id) {
-      continue;
-    }
-    byId.set(id, {
-      id,
-      title: String(entry?.title ?? id),
-      imageUrl: String(entry?.imageUrl ?? ""),
-    });
-  }
-
-  return orderedIds.map((id) => byId.get(id) ?? { id, title: id, imageUrl: "" });
+  return payload
+    .map((entry) => ({
+      id: String((entry as any)?.id ?? "").trim(),
+      name: String((entry as any)?.name ?? "").trim(),
+      coverUrl: String((entry as any)?.coverUrl ?? ""),
+    }))
+    .filter((entry) => Boolean(entry.id));
 }
 
 export async function getPlaylistById(context: ApiClientContext, playlistId: string) {

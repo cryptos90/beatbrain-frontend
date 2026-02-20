@@ -12,18 +12,14 @@ import {
   SPOTIFY_REDIRECT_URI_WEB,
   SPOTIFY_REDIRECT_URI_WEB_FALLBACK,
 } from "../../shared/config";
-import {
-  buildPlaylistPlaceholders,
-  CURATED_PLAYLIST_IDS,
-} from "../../shared/data/curatedPlaylists";
 import { ApiHttpError, type ApiClientContext } from "../../shared/net/apiClient";
 import {
   completeSpotifyCallback,
   consumeAuthResult,
   createQuizSession,
   deleteQuizSession,
+  getChoosePlaylists,
   loadNextQuizQuestion,
-  resolveChoosePlaylists,
   startSpotifyAuth,
   startSpotifyPlayback,
 } from "../../shared/net/beatbrainApi";
@@ -188,13 +184,13 @@ export function useBeatBrainController() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [pendingAuthState, setPendingAuthState] = useState<string | null>(null);
 
-  const [playlists, setPlaylists] = useState<PlaylistCard[]>(() =>
-    buildPlaylistPlaceholders(),
-  );
+  const [playlists, setPlaylists] = useState<PlaylistCard[]>([]);
   const [selectedPlaylistIndex, setSelectedPlaylistIndex] = useState(0);
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
   const [playlistIdInput, setPlaylistIdInput] = useState("");
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [chooseLoading, setChooseLoading] = useState(false);
+  const [chooseRetryAfterSeconds, setChooseRetryAfterSeconds] = useState<number | null>(null);
   const [questionCount, setQuestionCount] = useState(10);
 
   const carouselRef = useRef<FlatList<PlaylistCard>>(null);
@@ -883,21 +879,28 @@ export function useBeatBrainController() {
     let cancelled = false;
 
     const loadPlaylists = async () => {
+      setChooseLoading(true);
+      setChooseRetryAfterSeconds(null);
       try {
-        const resolved = await resolveChoosePlaylists(apiContext, [...CURATED_PLAYLIST_IDS]);
+        const resolved = await getChoosePlaylists(apiContext);
         if (cancelled) {
           return;
         }
 
         if (!resolved.length) {
           setPlaylistError("Keine Playlists gefunden.");
-          setPlaylists(buildPlaylistPlaceholders());
+          setPlaylists([]);
           return;
         }
 
-        setPlaylists(resolved);
+        const cards = resolved.map((playlist) => ({
+          id: playlist.id,
+          title: playlist.name || playlist.id,
+          imageUrl: playlist.coverUrl || "",
+        }));
+        setPlaylists(cards);
         setSelectedPlaylistIndex((index) =>
-          Math.max(0, Math.min(index, resolved.length - 1)),
+          Math.max(0, Math.min(index, cards.length - 1)),
         );
         setPlaylistError(null);
       } catch (error) {
@@ -909,12 +912,29 @@ export function useBeatBrainController() {
           console.error("[choose] playlist resolve failed", error);
         }
 
-        const message =
-          error instanceof ApiHttpError
-            ? error.message || "Playlists konnten nicht geladen werden."
-            : "Playlists konnten nicht geladen werden.";
+        let message = "Playlists konnten nicht geladen werden.";
+        if (error instanceof ApiHttpError) {
+          if (error.status === 429) {
+            const seconds =
+              typeof error.retryAfterSeconds === "number" && Number.isFinite(error.retryAfterSeconds)
+                ? Math.max(1, Math.ceil(error.retryAfterSeconds))
+                : null;
+            setChooseRetryAfterSeconds(seconds);
+            message = seconds
+              ? `Spotify rate-limited. Try again in ${seconds}s.`
+              : "Spotify rate-limited. Try again soon.";
+          } else if (error.status === 401) {
+            message = "Session abgelaufen, bitte erneut einloggen";
+          } else if (error.message) {
+            message = error.message;
+          }
+        }
         setPlaylistError(message);
-        setPlaylists(buildPlaylistPlaceholders());
+        setPlaylists([]);
+      } finally {
+        if (!cancelled) {
+          setChooseLoading(false);
+        }
       }
     };
 
@@ -1015,6 +1035,8 @@ export function useBeatBrainController() {
     playlistIdInput,
     setPlaylistIdInput,
     playlistError,
+    chooseLoading,
+    chooseRetryAfterSeconds,
     questionCount,
     setQuestionCount: (value: number) => setQuestionCount(clampQuestionCount(value)),
 

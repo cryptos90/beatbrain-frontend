@@ -2,15 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE_URL } from "../../shared/config";
-import {
-  buildPlaylistPlaceholders,
-  CURATED_PLAYLIST_IDS,
-} from "../../shared/data/curatedPlaylists";
 import { ApiHttpError, type ApiClientContext } from "../../shared/net/apiClient";
 import {
   consumeAuthResult,
   createQuizSession,
-  resolveChoosePlaylists,
+  getChoosePlaylists,
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
@@ -65,9 +61,7 @@ export function useHostController() {
   const [socketError, setSocketError] = useState<string | null>(null);
 
   const [questionCount, setQuestionCount] = useState(20);
-  const [playlists, setPlaylists] = useState<PlaylistCard[]>(() =>
-    buildPlaylistPlaceholders(),
-  );
+  const [playlists, setPlaylists] = useState<PlaylistCard[]>([]);
   const [selectedPlaylistIndex, setSelectedPlaylistIndex] = useState(0);
   const [playlistIdInput, setPlaylistIdInput] = useState("");
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -410,14 +404,19 @@ export function useHostController() {
 
     const loadPlaylists = async () => {
       try {
-        const resolved = await resolveChoosePlaylists(apiContext, [...CURATED_PLAYLIST_IDS]);
+        const resolved = await getChoosePlaylists(apiContext);
         if (cancelled || !resolved.length) {
           return;
         }
 
-        setPlaylists(resolved);
+        const cards = resolved.map((playlist) => ({
+          id: playlist.id,
+          title: playlist.name || playlist.id,
+          imageUrl: playlist.coverUrl || "",
+        }));
+        setPlaylists(cards);
         setSelectedPlaylistIndex((index) =>
-          Math.max(0, Math.min(index, resolved.length - 1)),
+          Math.max(0, Math.min(index, cards.length - 1)),
         );
       } catch (error) {
         if (cancelled) {

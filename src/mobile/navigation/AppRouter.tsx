@@ -58,6 +58,7 @@ export function AppRouter({ app }: Props) {
         <StatusBar hidden />
         <ChooseQuizView
           playlists={app.playlists}
+          loading={app.chooseLoading}
           selectedPlaylistIndex={app.selectedPlaylistIndex}
           selectedPlaylist={app.selectedPlaylist}
           carouselRef={app.carouselRef}

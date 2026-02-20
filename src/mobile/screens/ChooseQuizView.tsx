@@ -1,5 +1,5 @@
 import React, { RefObject } from "react";
-import { FlatList, Image, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Text, View } from "react-native";
 import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
 import { CARD_W, CHOOSE_FOOTER_PADDING_BOTTOM, SCREEN_W } from "../../constants/app";
@@ -8,6 +8,7 @@ import type { PlaylistCard } from "../../shared/types/app";
 
 type Props = {
   playlists: PlaylistCard[];
+  loading: boolean;
   selectedPlaylistIndex: number;
   selectedPlaylist: PlaylistCard | null;
   carouselRef: RefObject<FlatList<PlaylistCard> | null>;
@@ -19,6 +20,7 @@ type Props = {
 
 export function ChooseQuizView({
   playlists,
+  loading,
   selectedPlaylistIndex,
   selectedPlaylist,
   carouselRef,
@@ -27,13 +29,28 @@ export function ChooseQuizView({
   onSelectPlaylistIndex,
   onStartQuiz,
 }: Props) {
-  const disableStart = !selectedPlaylist;
+  const disableStart = loading || !selectedPlaylist;
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <AppHeader onBack={onBack} />
 
       <View style={{ flex: 1, paddingTop: 8 }}>
+        {loading ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <ActivityIndicator color={Colors.textOnBg} />
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 18,
+                fontWeight: "700",
+                color: Colors.textOnBg,
+              }}
+            >
+              Playlists werden geladen...
+            </Text>
+          </View>
+        ) : (
         <FlatList
           ref={carouselRef}
           data={playlists}
@@ -96,6 +113,7 @@ export function ChooseQuizView({
             );
           }}
         />
+        )}
 
         {!!playlistError && (
           <Text style={{ textAlign: "center", color: "red", fontWeight: "700", marginTop: 8 }}>
