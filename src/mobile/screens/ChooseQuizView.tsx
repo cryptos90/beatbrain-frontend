@@ -93,7 +93,7 @@ export function ChooseQuizView({
                 {primaryError}
               </Text>
             )}
-            {!primaryError && !!secondaryError && (
+            {!!secondaryError && secondaryError !== primaryError && (
               <Text style={{ textAlign: "center", color: "red", fontWeight: "700" }}>
                 {secondaryError}
               </Text>
