@@ -63,6 +63,11 @@ export function AppRouter({ app }: Props) {
           selectedPlaylist={app.selectedPlaylist}
           carouselRef={app.carouselRef}
           playlistError={app.playlistError}
+          reauthRequired={app.reauthRequired}
+          reauthMessage={app.reauthMessage}
+          viewMode={app.chooseViewMode}
+          onRelogin={app.reloginChoose}
+          onRetry={app.retryChooseLoad}
           onBack={() => app.setScreen({ name: "singleMenu" })}
           onSelectPlaylistIndex={app.setSelectedPlaylistIndex}
           onStartQuiz={async () => {
@@ -88,6 +93,9 @@ export function AppRouter({ app }: Props) {
         <CreateQuizView
           playlistIdInput={app.playlistIdInput}
           playlistError={app.playlistError}
+          reauthRequired={app.reauthRequired}
+          reauthMessage={app.reauthMessage}
+          onRelogin={app.startSpotifyLogin}
           onBack={() => app.setScreen({ name: "singleMenu" })}
           onPlaylistIdChange={app.setPlaylistIdInput}
           onCreateQuiz={app.beginQuizFromCreate}

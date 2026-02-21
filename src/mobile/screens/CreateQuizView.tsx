@@ -7,17 +7,23 @@ import { Colors } from "../../theme";
 type Props = {
   playlistIdInput: string;
   playlistError: string | null;
+  reauthRequired?: boolean;
+  reauthMessage?: string | null;
   onBack: () => void;
   onPlaylistIdChange: (value: string) => void;
   onCreateQuiz: () => Promise<void>;
+  onRelogin?: () => Promise<void>;
 };
 
 export function CreateQuizView({
   playlistIdInput,
   playlistError,
+  reauthRequired = false,
+  reauthMessage = null,
   onBack,
   onPlaylistIdChange,
   onCreateQuiz,
+  onRelogin,
 }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -45,6 +51,23 @@ export function CreateQuizView({
           <Text style={{ marginTop: 10, textAlign: "center", color: "red", fontWeight: "700" }}>
             {playlistError}
           </Text>
+        )}
+        {reauthRequired && (
+          <View style={{ marginTop: 10 }}>
+            <Text style={{ textAlign: "center", color: "red", fontWeight: "700" }}>
+              Spotify Login erneuern erforderlich
+            </Text>
+            {!!reauthMessage && (
+              <Text style={{ marginTop: 6, textAlign: "center", color: "red" }}>
+                {reauthMessage}
+              </Text>
+            )}
+          </View>
+        )}
+        {reauthRequired && !!onRelogin && (
+          <View style={{ marginTop: 12 }}>
+            <BBButton title="Erneut einloggen" onPress={onRelogin} />
+          </View>
         )}
 
         <View style={{ marginTop: 18 }}>

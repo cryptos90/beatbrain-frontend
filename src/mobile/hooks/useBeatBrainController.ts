@@ -169,6 +169,28 @@ function toPlaybackErrorMessage(error: unknown) {
   return "Spotify playback failed.";
 }
 
+function toReauthMessage(error: ApiHttpError) {
+  const details = (error.details ?? {}) as any;
+  const reason = String(details?.error?.reason ?? details?.reason ?? "").trim();
+  const spotifyMessage = String(
+    details?.error?.spotifyMessage ?? details?.spotifyMessage ?? "",
+  ).trim();
+  const parts = [reason, spotifyMessage].filter(Boolean);
+  return parts.join(" - ");
+}
+
+function toShortUiMessage(raw: string | null | undefined, fallback: string) {
+  const normalized = String(raw ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized.slice(0, 180);
+}
+
+type ChooseViewMode = "normal" | "error";
+
 type LastQuizConfig = {
   playlistId: string;
   playlistTitle: string;
@@ -189,8 +211,12 @@ export function useBeatBrainController() {
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
   const [playlistIdInput, setPlaylistIdInput] = useState("");
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [reauthRequired, setReauthRequired] = useState(false);
+  const [reauthMessage, setReauthMessage] = useState<string | null>(null);
+  const [chooseViewMode, setChooseViewMode] = useState<ChooseViewMode>("normal");
   const [chooseLoading, setChooseLoading] = useState(false);
   const [chooseRetryAfterSeconds, setChooseRetryAfterSeconds] = useState<number | null>(null);
+  const [chooseReloadNonce, setChooseReloadNonce] = useState(0);
   const [questionCount, setQuestionCount] = useState(10);
 
   const carouselRef = useRef<FlatList<PlaylistCard>>(null);
@@ -237,6 +263,18 @@ export function useBeatBrainController() {
     }),
     [hostJwt],
   );
+
+  const clearChooseErrorState = () => {
+    setPlaylistError(null);
+    setReauthRequired(false);
+    setReauthMessage(null);
+    setChooseRetryAfterSeconds(null);
+    setChooseViewMode("normal");
+  };
+
+  const reloadChoosePlaylists = () => {
+    setChooseReloadNonce((value) => value + 1);
+  };
 
   const stopTimer = () => {
     if (timeoutRef.current) {
@@ -588,6 +626,9 @@ export function useBeatBrainController() {
   };
 
   const startSpotifyLogin = async () => {
+    setReauthRequired(false);
+    setReauthMessage(null);
+    setPlaylistError(null);
     setAuthBusy(true);
     setLoginPending(true);
     setAuthError(null);
@@ -729,6 +770,21 @@ export function useBeatBrainController() {
     await startSpotifyLogin();
   };
 
+  const retryChooseLoad = async () => {
+    clearChooseErrorState();
+    reloadChoosePlaylists();
+  };
+
+  const reloginChoose = async () => {
+    clearChooseErrorState();
+    await startSpotifyLogin();
+    const storedJwt = await getStoredHostJwt();
+    if (storedJwt) {
+      setScreen({ name: "choose" });
+      reloadChoosePlaylists();
+    }
+  };
+
   const beginQuizForPlaylist = async (
     playlistId: string,
     playlistTitle: string,
@@ -738,12 +794,22 @@ export function useBeatBrainController() {
     const normalizedPlaylistId = (playlistId ?? "").trim();
     if (!normalizedPlaylistId) {
       setPlaylistError("Playlist ID missing.");
+      if (screen.name === "choose") {
+        setChooseViewMode("error");
+      }
       return;
     }
 
+    const isChooseScreen = screen.name === "choose";
     const effectiveQuestionCount = clampQuestionCount(forceQuestionCount ?? questionCount);
     setQuestionCount(effectiveQuestionCount);
-    setPlaylistError(null);
+    if (isChooseScreen) {
+      clearChooseErrorState();
+    } else {
+      setPlaylistError(null);
+      setReauthRequired(false);
+      setReauthMessage(null);
+    }
 
     resetQuestionUi();
     setCurrentQuestion(null);
@@ -769,9 +835,27 @@ export function useBeatBrainController() {
       setScreen({ name: "quiz", playlistTitle });
     } catch (error) {
       if (error instanceof ApiHttpError) {
-        setPlaylistError(error.message || "Could not create quiz session.");
+        const message = toShortUiMessage(
+          error.message,
+          "Could not create quiz session.",
+        );
+        if (error.status === 409) {
+          setReauthRequired(true);
+          setReauthMessage(
+            toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
+          );
+        } else {
+          setReauthRequired(false);
+          setReauthMessage(null);
+        }
+        setPlaylistError(message);
       } else {
+        setReauthRequired(false);
+        setReauthMessage(null);
         setPlaylistError("Could not create quiz session.");
+      }
+      if (isChooseScreen) {
+        setChooseViewMode("error");
       }
     }
   };
@@ -880,7 +964,11 @@ export function useBeatBrainController() {
 
     const loadPlaylists = async () => {
       setChooseLoading(true);
+      setChooseViewMode("normal");
       setChooseRetryAfterSeconds(null);
+      setPlaylistError(null);
+      setReauthRequired(false);
+      setReauthMessage(null);
       try {
         const resolved = await getChoosePlaylists(apiContext);
         if (cancelled) {
@@ -889,6 +977,9 @@ export function useBeatBrainController() {
 
         if (!resolved.length) {
           setPlaylistError("Keine Playlists gefunden.");
+          setReauthRequired(false);
+          setReauthMessage(null);
+          setChooseViewMode("error");
           setPlaylists([]);
           return;
         }
@@ -902,6 +993,9 @@ export function useBeatBrainController() {
         setSelectedPlaylistIndex((index) =>
           Math.max(0, Math.min(index, cards.length - 1)),
         );
+        setChooseViewMode("normal");
+        setReauthRequired(false);
+        setReauthMessage(null);
         setPlaylistError(null);
       } catch (error) {
         if (cancelled) {
@@ -920,16 +1014,32 @@ export function useBeatBrainController() {
                 ? Math.max(1, Math.ceil(error.retryAfterSeconds))
                 : null;
             setChooseRetryAfterSeconds(seconds);
+            setReauthRequired(false);
+            setReauthMessage(null);
             message = seconds
               ? `Spotify rate-limited. Try again in ${seconds}s.`
               : "Spotify rate-limited. Try again soon.";
           } else if (error.status === 401) {
+            setReauthRequired(false);
+            setReauthMessage(null);
             message = "Session abgelaufen, bitte erneut einloggen";
+          } else if (error.status === 409) {
+            setReauthRequired(true);
+            setReauthMessage(
+              toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
+            );
+            message = toShortUiMessage(error.message, "Re-login erforderlich.");
           } else if (error.message) {
-            message = error.message;
+            setReauthRequired(false);
+            setReauthMessage(null);
+            message = toShortUiMessage(error.message, "Playlists konnten nicht geladen werden.");
           }
+        } else {
+          setReauthRequired(false);
+          setReauthMessage(null);
         }
         setPlaylistError(message);
+        setChooseViewMode("error");
         setPlaylists([]);
       } finally {
         if (!cancelled) {
@@ -943,7 +1053,7 @@ export function useBeatBrainController() {
     return () => {
       cancelled = true;
     };
-  }, [apiContext, hasAuth, screen.name]);
+  }, [apiContext, chooseReloadNonce, hasAuth, screen.name]);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -1035,11 +1145,16 @@ export function useBeatBrainController() {
     playlistIdInput,
     setPlaylistIdInput,
     playlistError,
+    reauthRequired,
+    reauthMessage,
+    chooseViewMode,
     chooseLoading,
     chooseRetryAfterSeconds,
     questionCount,
     setQuestionCount: (value: number) => setQuestionCount(clampQuestionCount(value)),
 
+    retryChooseLoad,
+    reloginChoose,
     beginQuizForPlaylist,
     beginQuizFromCreate,
     leaveQuizToMenu,
