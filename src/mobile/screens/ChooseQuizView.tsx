@@ -98,8 +98,16 @@ export function ChooseQuizView({
                 {secondaryError}
               </Text>
             )}
-            {!!onRelogin && <BBButton title="Erneut einloggen" onPress={onRelogin} />}
-            {!!onRetry && <BBButton title="Retry" onPress={onRetry} />}
+            <View style={{ width: "90%", maxWidth: 420, marginTop: 6, gap: 10 }}>
+              {!!onRelogin && (
+                <BBButton
+                  title="Erneut einloggen"
+                  onPress={onRelogin}
+                  style={{ width: "100%" }}
+                />
+              )}
+              {!!onRetry && <BBButton title="Retry" onPress={onRetry} style={{ width: "100%" }} />}
+            </View>
           </View>
         ) : (
           <FlatList
