@@ -71,6 +71,16 @@ export async function startSpotifyPlayback(
   });
 }
 
+export async function stopSpotifyPlayback(
+  context: ApiClientContext,
+  payload?: { deviceId?: string },
+) {
+  return requestJson(context, "/spotify/playback/pause", {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
 export async function getChoosePlaylists(
   context: ApiClientContext,
 ): Promise<ChoosePlaylist[]> {

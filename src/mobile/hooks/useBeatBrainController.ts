@@ -22,6 +22,7 @@ import {
   getChoosePlaylists,
   loadNextQuizQuestion,
   startSpotifyPlayback,
+  stopSpotifyPlayback,
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
@@ -154,6 +155,12 @@ async function checkBackendHealth(apiBase: string, timeoutMs = 2500) {
   } finally {
     clearTimeout(timeoutHandle);
   }
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function toPlaybackErrorMessage(error: unknown): string | null {
@@ -329,8 +336,51 @@ export function useBeatBrainController() {
     setPickedOption(null);
   };
 
+  const startBackendPlaybackWithDeviceWarmup = async (trackUri: string) => {
+    try {
+      await startSpotifyPlayback(apiContext, { trackUri });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      const noActiveDevice =
+        (error instanceof ApiHttpError && error.status === 404) ||
+        message.includes("no active spotify device");
+      if (!noActiveDevice) {
+        throw error;
+      }
+
+      let lastError: unknown = error;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await wait(700);
+        try {
+          await startSpotifyPlayback(apiContext, { trackUri });
+          return;
+        } catch (retryError) {
+          const isNoActiveDevice =
+            (retryError instanceof ApiHttpError && retryError.status === 404) ||
+            (retryError instanceof Error &&
+              retryError.message.toLowerCase().includes("no active spotify device"));
+          if (!isNoActiveDevice) {
+            throw retryError;
+          }
+          lastError = retryError;
+        }
+      }
+      throw lastError;
+    }
+  };
+
+  const stopQuizPlayback = async () => {
+    try {
+      await stopSpotifyPlayback(apiContext);
+    } catch {
+      // Ignore pause errors while leaving quiz.
+    }
+  };
+
   const cleanupQuizSession = async () => {
     stopTimer();
+    await stopQuizPlayback();
     if (!quizSessionId) {
       return;
     }
@@ -953,7 +1003,7 @@ export function useBeatBrainController() {
         setQuizPlaybackCanOpenSpotify(false);
       } catch {
         try {
-          await startSpotifyPlayback(apiContext, { trackUri });
+          await startBackendPlaybackWithDeviceWarmup(trackUri);
           setQuizPlaybackError(null);
           setQuizPlaybackCanOpenSpotify(false);
         } catch (fallbackError) {
@@ -1034,6 +1084,9 @@ export function useBeatBrainController() {
       return;
     }
 
+    if (qIndex >= totalQuestions - 1) {
+      await stopQuizPlayback();
+    }
     setQIndex((value) => value + 1);
   };
 
@@ -1055,6 +1108,10 @@ export function useBeatBrainController() {
     await cleanupQuizSession();
     setCurrentQuestion(null);
     setScreen({ name: "singleMenu" });
+  };
+
+  const openSpotifyForPlayback = async () => {
+    await openSpotifyApp();
   };
 
   useEffect(() => {
@@ -1220,7 +1277,6 @@ export function useBeatBrainController() {
       stopTimer();
       setQuizPlaybackError(null);
       setQuizPlaybackCanOpenSpotify(false);
-      void disconnectSpotifyAppRemote();
     }
   }, [screen.name]);
 
@@ -1236,6 +1292,7 @@ export function useBeatBrainController() {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      void disconnectSpotifyAppRemote();
       stopTimer();
     };
   }, []);
@@ -1291,7 +1348,7 @@ export function useBeatBrainController() {
     nextOrFinish,
     quizPlaybackError,
     quizPlaybackCanOpenSpotify,
-    openSpotifyForPlayback: openSpotifyApp,
+    openSpotifyForPlayback,
 
     mpLobby,
     mpQuestion,
