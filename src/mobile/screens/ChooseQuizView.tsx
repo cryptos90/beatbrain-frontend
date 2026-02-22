@@ -11,6 +11,7 @@ type ChooseViewMode = "normal" | "error";
 type Props = {
   playlists: PlaylistCard[];
   loading: boolean;
+  isStartingQuiz?: boolean;
   selectedPlaylistIndex: number;
   selectedPlaylist: PlaylistCard | null;
   carouselRef: RefObject<FlatList<PlaylistCard> | null>;
@@ -28,6 +29,7 @@ type Props = {
 export function ChooseQuizView({
   playlists,
   loading,
+  isStartingQuiz = false,
   selectedPlaylistIndex,
   selectedPlaylist,
   carouselRef,
@@ -41,7 +43,7 @@ export function ChooseQuizView({
   onRelogin,
   onRetry,
 }: Props) {
-  const disableStart = loading || !selectedPlaylist;
+  const disableStart = loading || isStartingQuiz || !selectedPlaylist;
   const isErrorMode = viewMode === "error";
   const errorTitle = reauthRequired
     ? "Spotify Login erneuern erforderlich"
@@ -98,7 +100,7 @@ export function ChooseQuizView({
                 {secondaryError}
               </Text>
             )}
-            <View style={{ width: "90%", maxWidth: 420, marginTop: 6, gap: 10 }}>
+            <View style={{ width: "85%", maxWidth: 420, marginTop: 10, gap: 10 }}>
               {!!onRelogin && (
                 <BBButton
                   title="Erneut einloggen"

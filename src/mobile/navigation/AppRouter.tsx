@@ -59,6 +59,7 @@ export function AppRouter({ app }: Props) {
         <ChooseQuizView
           playlists={app.playlists}
           loading={app.chooseLoading}
+          isStartingQuiz={app.isStartingQuiz}
           selectedPlaylistIndex={app.selectedPlaylistIndex}
           selectedPlaylist={app.selectedPlaylist}
           carouselRef={app.carouselRef}
@@ -117,9 +118,12 @@ export function AppRouter({ app }: Props) {
           timerAnim={app.timerAnim}
           timerBarW={app.timerBarW}
           playbackError={app.quizPlaybackError}
+          playbackCanOpenSpotify={app.quizPlaybackCanOpenSpotify}
           onTimerLayout={app.setTimerBarW}
           onBack={app.leaveQuizToMenu}
           onPickOption={app.onPickOption}
+          onSubmitYearInput={app.submitYearInputAnswer}
+          onOpenSpotifyApp={app.openSpotifyForPlayback}
           onNextOrFinish={app.nextOrFinish}
         />
       </>

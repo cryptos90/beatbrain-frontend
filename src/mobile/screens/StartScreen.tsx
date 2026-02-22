@@ -1,17 +1,13 @@
 import React from "react";
 import { Image, View } from "react-native";
 import { BBButton } from "../../components/BBButton";
-import { BUTTON_DROP } from "../../constants/app";
+import { BACK_BTN_SIZE, BUTTON_DROP, HEADER_PAD_TOP, LOGO_SIZE } from "../../constants/app";
 import { Colors } from "../../theme";
 
 type Props = {
   onSinglePlayer: () => void;
   onMultiplayer: () => void;
 };
-
-const HEADER_PAD_TOP = 54;
-const BACK_BTN_SIZE = 56;
-const LOGO_SIZE = 200;
 
 export function StartScreen({ onSinglePlayer, onMultiplayer }: Props) {
   return (
@@ -35,4 +31,3 @@ export function StartScreen({ onSinglePlayer, onMultiplayer }: Props) {
     </View>
   );
 }
-

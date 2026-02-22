@@ -18,13 +18,20 @@ import {
   consumeAuthResult,
   createQuizSession,
   deleteQuizSession,
+  getSpotifySdkAccessToken,
   getChoosePlaylists,
   loadNextQuizQuestion,
-  startSpotifyAuth,
   startSpotifyPlayback,
+  startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
 import type { LobbyState, PlaylistCard, QuizQuestion, Screen } from "../../shared/types/app";
+import {
+  SpotifyAppRemoteError,
+  disconnectSpotifyAppRemote,
+  openSpotifyApp,
+  playTrackViaSpotifyAppRemote,
+} from "../services/spotifyAppRemote";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -149,7 +156,20 @@ async function checkBackendHealth(apiBase: string, timeoutMs = 2500) {
   }
 }
 
-function toPlaybackErrorMessage(error: unknown) {
+function toPlaybackErrorMessage(error: unknown): string | null {
+  if (error instanceof SpotifyAppRemoteError) {
+    if (error.code === "MODULE_MISSING") {
+      return null;
+    }
+    if (error.code === "IOS_ONLY") {
+      return null;
+    }
+    if (error.message) {
+      return error.message;
+    }
+    return "Spotify App Remote playback failed.";
+  }
+
   if (error instanceof ApiHttpError) {
     if (error.message) {
       return error.message;
@@ -201,6 +221,7 @@ type LastQuizConfig = {
 export function useBeatBrainController() {
   const [screen, setScreen] = useState<Screen>({ name: "start" });
   const [hostJwt, setHostJwt] = useState<string | null>(null);
+  const appRemoteTokenRef = useRef<{ accessToken: string; expiresAt: number } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -218,6 +239,8 @@ export function useBeatBrainController() {
   const [chooseRetryAfterSeconds, setChooseRetryAfterSeconds] = useState<number | null>(null);
   const [chooseReloadNonce, setChooseReloadNonce] = useState(0);
   const [questionCount, setQuestionCount] = useState(10);
+  const [isStartingQuiz, setIsStartingQuiz] = useState(false);
+  const isStartingQuizRef = useRef(false);
 
   const carouselRef = useRef<FlatList<PlaylistCard>>(null);
 
@@ -229,6 +252,7 @@ export function useBeatBrainController() {
   const [revealed, setRevealed] = useState(false);
   const [pickedOption, setPickedOption] = useState<string | null>(null);
   const [quizPlaybackError, setQuizPlaybackError] = useState<string | null>(null);
+  const [quizPlaybackCanOpenSpotify, setQuizPlaybackCanOpenSpotify] = useState(false);
   const [lastQuizConfig, setLastQuizConfig] = useState<LastQuizConfig | null>(null);
 
   const timerAnim = useRef(new Animated.Value(1)).current;
@@ -253,6 +277,7 @@ export function useBeatBrainController() {
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
+    appRemoteTokenRef.current = null;
     void setStoredHostJwt(jwt);
   };
 
@@ -791,12 +816,19 @@ export function useBeatBrainController() {
     decadeTag?: string,
     forceQuestionCount?: number,
   ) => {
+    if (isStartingQuizRef.current) {
+      return;
+    }
+
+    isStartingQuizRef.current = true;
+    setIsStartingQuiz(true);
     const normalizedPlaylistId = (playlistId ?? "").trim();
     if (!normalizedPlaylistId) {
       setPlaylistError("Playlist ID missing.");
       if (screen.name === "choose") {
         setChooseViewMode("error");
       }
+      setIsStartingQuiz(false);
       return;
     }
 
@@ -817,6 +849,7 @@ export function useBeatBrainController() {
     setQIndex(0);
     setTotalQuestions(effectiveQuestionCount);
     setQuizPlaybackError(null);
+    setQuizPlaybackCanOpenSpotify(false);
 
     try {
       const session = await createQuizSession(apiContext, {
@@ -857,12 +890,38 @@ export function useBeatBrainController() {
       if (isChooseScreen) {
         setChooseViewMode("error");
       }
+    } finally {
+      isStartingQuizRef.current = false;
+      setIsStartingQuiz(false);
     }
   };
 
   const beginQuizFromCreate = async () => {
     const playlistId = playlistIdInput.trim();
     await beginQuizForPlaylist(playlistId, playlistId || "Custom Playlist");
+  };
+
+  const getValidSpotifySdkToken = async () => {
+    const cached = appRemoteTokenRef.current;
+    if (cached && cached.accessToken && Date.now() < cached.expiresAt - 30_000) {
+      return cached.accessToken;
+    }
+
+    const tokenPayload = await getSpotifySdkAccessToken(apiContext);
+    const accessToken = String(tokenPayload.accessToken ?? "").trim();
+    if (!accessToken) {
+      throw new Error("Spotify SDK token unavailable.");
+    }
+
+    const expiresInSecondsRaw = Number(tokenPayload.expiresIn ?? 0);
+    const expiresInSeconds = Number.isFinite(expiresInSecondsRaw)
+      ? Math.max(30, Math.floor(expiresInSecondsRaw))
+      : 300;
+    appRemoteTokenRef.current = {
+      accessToken,
+      expiresAt: Date.now() + expiresInSeconds * 1000,
+    };
+    return accessToken;
   };
 
   const loadNextQuestion = async () => {
@@ -881,15 +940,27 @@ export function useBeatBrainController() {
     const question = data.question as QuizQuestion;
     setCurrentQuestion(question);
     setQuizPlaybackError(null);
+    setQuizPlaybackCanOpenSpotify(false);
     resetQuestionUi();
     startTimer();
 
     const trackUri = typeof question?.correctTrackUri === "string" ? question.correctTrackUri : "";
     if (trackUri) {
       try {
-        await startSpotifyPlayback(apiContext, trackUri);
-      } catch (error) {
-        setQuizPlaybackError(toPlaybackErrorMessage(error));
+        const spotifySdkAccessToken = await getValidSpotifySdkToken();
+        await playTrackViaSpotifyAppRemote(trackUri, spotifySdkAccessToken);
+        setQuizPlaybackError(null);
+        setQuizPlaybackCanOpenSpotify(false);
+      } catch {
+        try {
+          await startSpotifyPlayback(apiContext, { trackUri });
+          setQuizPlaybackError(null);
+          setQuizPlaybackCanOpenSpotify(false);
+        } catch (fallbackError) {
+          const playbackMessage = toPlaybackErrorMessage(fallbackError);
+          setQuizPlaybackError(playbackMessage);
+          setQuizPlaybackCanOpenSpotify(Boolean(playbackMessage));
+        }
       }
     }
   };
@@ -911,6 +982,48 @@ export function useBeatBrainController() {
     setPickedOption(option);
 
     if (option === currentQuestion.correctAnswer) {
+      setScore((value) => value + 1);
+    }
+  };
+
+  const submitYearInputAnswer = (rawInput: string) => {
+    if (!currentQuestion || revealed) {
+      return;
+    }
+
+    const normalizedInput = String(rawInput ?? "").trim();
+    if (!/^\d{1,4}$/.test(normalizedInput)) {
+      return;
+    }
+
+    const guess = Number.parseInt(normalizedInput, 10);
+    if (!Number.isFinite(guess)) {
+      return;
+    }
+
+    const payload = currentQuestion.questionObject.payload;
+    const toleranceRaw = Number(payload?.toleranceYears ?? 0);
+    const toleranceYears =
+      Number.isFinite(toleranceRaw) && toleranceRaw >= 0 ? Math.floor(toleranceRaw) : 0;
+
+    const payloadCorrectYearRaw = Number(payload?.correctYear);
+    const fallbackCorrectYear = Number.parseInt(String(currentQuestion.correctAnswer ?? ""), 10);
+    const correctYear = Number.isFinite(payloadCorrectYearRaw)
+      ? payloadCorrectYearRaw
+      : Number.isFinite(fallbackCorrectYear)
+        ? fallbackCorrectYear
+        : NaN;
+
+    if (!Number.isFinite(correctYear)) {
+      return;
+    }
+
+    Keyboard.dismiss();
+    stopTimer();
+    setRevealed(true);
+    setPickedOption(String(guess));
+
+    if (Math.abs(guess - correctYear) <= toleranceYears) {
       setScore((value) => value + 1);
     }
   };
@@ -1106,6 +1219,8 @@ export function useBeatBrainController() {
     if (screen.name !== "quiz") {
       stopTimer();
       setQuizPlaybackError(null);
+      setQuizPlaybackCanOpenSpotify(false);
+      void disconnectSpotifyAppRemote();
     }
   }, [screen.name]);
 
@@ -1152,6 +1267,7 @@ export function useBeatBrainController() {
     chooseRetryAfterSeconds,
     questionCount,
     setQuestionCount: (value: number) => setQuestionCount(clampQuestionCount(value)),
+    isStartingQuiz,
 
     retryChooseLoad,
     reloginChoose,
@@ -1171,8 +1287,11 @@ export function useBeatBrainController() {
     timerBarW,
     setTimerBarW,
     onPickOption,
+    submitYearInputAnswer,
     nextOrFinish,
     quizPlaybackError,
+    quizPlaybackCanOpenSpotify,
+    openSpotifyForPlayback: openSpotifyApp,
 
     mpLobby,
     mpQuestion,

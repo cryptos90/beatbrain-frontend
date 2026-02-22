@@ -16,6 +16,11 @@ export type QuestionObject = {
   questionText: string;
   answerFieldPath: string;
   answerType: "multiple-choice" | "binary" | "year-input";
+  format?: "options" | "year_input";
+  payload?: {
+    toleranceYears?: number;
+    correctYear?: number;
+  };
 };
 
 export type QuizQuestion = {

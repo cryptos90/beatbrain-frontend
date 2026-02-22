@@ -1,7 +1,9 @@
 ﻿import React from "react";
 import { ActivityIndicator, Image, Text, View } from "react-native";
-import { Colors } from "../theme";
+import { BackButton } from "../components/BackButton";
 import { BBButton } from "../components/BBButton";
+import { BACK_BTN_SIZE, BUTTON_DROP, HEADER_PAD_TOP, LOGO_SIZE } from "../constants/app";
+import { Colors } from "../theme";
 
 type Props = {
   onBack: () => void;
@@ -11,11 +13,6 @@ type Props = {
   waitingForLogin?: boolean;
   loginError?: string | null;
 };
-
-const HEADER_PAD_TOP = 54;
-const BACK_BTN_SIZE = 56;
-const LOGO_SIZE = 200;
-const BUTTON_DROP = 56 * 2;
 
 export function SinglePlayerMenu({
   onBack,
@@ -31,16 +28,7 @@ export function SinglePlayerMenu({
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <View style={{ paddingTop: HEADER_PAD_TOP, paddingHorizontal: 16 }}>
         <View style={{ height: BACK_BTN_SIZE, justifyContent: "flex-start", alignItems: "flex-start" }}>
-          <BBButton
-            title="←"
-            onPress={onBack}
-            style={{
-              width: BACK_BTN_SIZE,
-              height: BACK_BTN_SIZE,
-              paddingHorizontal: 0,
-              justifyContent: "center",
-            }}
-          />
+          <BackButton onPress={onBack} />
         </View>
 
         <View style={{ alignItems: "center" }}>

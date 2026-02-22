@@ -50,6 +50,27 @@ export async function consumeAuthResult(authCode: string) {
   return (await response.json()) as JsonRecord;
 }
 
+export async function getSpotifySdkAccessToken(context: ApiClientContext) {
+  const payload = (await requestJson(context, "/auth/spotify/token", {
+    method: "GET",
+  })) as JsonRecord;
+
+  return {
+    accessToken: String(payload?.accessToken ?? "").trim(),
+    expiresIn: Number(payload?.expiresIn ?? 0),
+  };
+}
+
+export async function startSpotifyPlayback(
+  context: ApiClientContext,
+  payload: { trackUri: string; deviceId?: string },
+) {
+  return requestJson(context, "/spotify/playback/play", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getChoosePlaylists(
   context: ApiClientContext,
 ): Promise<ChoosePlaylist[]> {
@@ -93,20 +114,6 @@ export async function createQuizSession(
 export async function loadNextQuizQuestion(context: ApiClientContext, sessionId: string) {
   return requestJson(context, `/quiz/sessions/${sessionId}/next`, {
     method: "POST",
-  });
-}
-
-export async function startSpotifyPlayback(
-  context: ApiClientContext,
-  trackUri: string,
-  deviceId?: string,
-) {
-  return requestJson(context, "/spotify/playback/play", {
-    method: "POST",
-    body: JSON.stringify({
-      trackUri,
-      deviceId: deviceId ?? undefined,
-    }),
   });
 }
 

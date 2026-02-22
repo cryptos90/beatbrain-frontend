@@ -1,7 +1,14 @@
 ﻿import React from "react";
 import { ActivityIndicator, Animated, Image, Pressable, Text, TextInput, View } from "react-native";
+import { BackButton } from "../components/BackButton";
 import { BBButton } from "../components/BBButton";
-import { BACK_BTN_SIZE, HEADER_PAD_TOP, QUESTIONS_PER_QUIZ, QUIZ_LOGO_SIZE } from "../constants/app";
+import {
+  BACK_BTN_SIZE,
+  HEADER_PAD_TOP,
+  QUESTIONS_PER_QUIZ,
+  QUIZ_LOGO_HEIGHT,
+  QUIZ_LOGO_WIDTH,
+} from "../constants/app";
 import { Colors, Radius } from "../theme";
 import type { QuizQuestion } from "../types/app";
 
@@ -49,18 +56,57 @@ export function QuizView({
   }
 
   const isLast = qIndex >= QUESTIONS_PER_QUIZ - 1;
+  const isYearInputQuestion =
+    currentQuestion.questionObject.format === "year_input" ||
+    currentQuestion.questionObject.answerType === "year-input";
+  const payload = currentQuestion.questionObject.payload;
+  const toleranceRaw = Number(payload?.toleranceYears ?? 0);
+  const toleranceYears =
+    Number.isFinite(toleranceRaw) && toleranceRaw >= 0 ? Math.floor(toleranceRaw) : 0;
+  const payloadCorrectYearRaw = Number(payload?.correctYear);
+  const fallbackCorrectYear = Number.parseInt(String(currentQuestion.correctAnswer ?? ""), 10);
+  const correctYear = Number.isFinite(payloadCorrectYearRaw)
+    ? payloadCorrectYearRaw
+    : Number.isFinite(fallbackCorrectYear)
+      ? fallbackCorrectYear
+      : NaN;
+  const trimmedYearInput = yearInput.trim();
+  const yearInputGuess =
+    /^\d{4}$/.test(trimmedYearInput) ? Number.parseInt(trimmedYearInput, 10) : NaN;
+  const isYearGuessInTolerance =
+    Number.isFinite(yearInputGuess) &&
+    Number.isFinite(correctYear) &&
+    Math.abs(yearInputGuess - correctYear) <= toleranceYears;
+  const yearInputFeedbackState =
+    !revealed ||
+    !isYearInputQuestion ||
+    toleranceYears <= 0 ||
+    !Number.isFinite(yearInputGuess) ||
+    !Number.isFinite(correctYear)
+      ? "neutral"
+      : isYearGuessInTolerance
+        ? "correct"
+        : "wrong";
+  const yearInputBackgroundColor =
+    yearInputFeedbackState === "correct"
+      ? "rgba(34,197,94,0.28)"
+      : yearInputFeedbackState === "wrong"
+        ? "rgba(239,68,68,0.28)"
+        : Colors.white;
+  const yearInputBorderColor =
+    yearInputFeedbackState === "correct"
+      ? "rgba(34,197,94,0.95)"
+      : yearInputFeedbackState === "wrong"
+        ? "rgba(239,68,68,0.95)"
+        : "transparent";
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <View style={{ paddingTop: HEADER_PAD_TOP, paddingHorizontal: 16 }}>
         <View style={{ height: BACK_BTN_SIZE, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <BBButton
-            title="←"
-            onPress={onBack}
-            style={{ width: BACK_BTN_SIZE, height: BACK_BTN_SIZE, paddingHorizontal: 0, justifyContent: "center" }}
-          />
+          <BackButton onPress={onBack} />
 
-          <Image source={require("../../assets/logo.png")} resizeMode="contain" style={{ width: QUIZ_LOGO_SIZE, height: QUIZ_LOGO_SIZE }} />
+          <Image source={require("../../assets/logo.png")} resizeMode="contain" style={{ width: QUIZ_LOGO_WIDTH, height: QUIZ_LOGO_HEIGHT }} />
         </View>
       </View>
 
@@ -125,13 +171,15 @@ export function QuizView({
           </Text>
         </View>
 
-        {currentQuestion.questionObject.answerType === "year-input" ? (
+        {isYearInputQuestion ? (
           <View style={{ marginTop: 18 }}>
             {!revealed && (
               <>
                 <View
                   style={{
-                    backgroundColor: Colors.white,
+                    backgroundColor: yearInputBackgroundColor,
+                    borderWidth: 2,
+                    borderColor: yearInputBorderColor,
                     borderRadius: 10,
                     paddingHorizontal: 14,
                     paddingVertical: 10,
@@ -215,9 +263,7 @@ export function QuizView({
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: Colors.textOnNavy, fontSize: 28, fontWeight: "800" }}>Song Info</Text>
-
-              <View style={{ height: 12 }} />
+              <View style={{ height: 6 }} />
 
               {!!currentQuestion.trackInfo.coverUrl && (
                 <Image

@@ -3,6 +3,7 @@ import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
+import { BUTTON_DROP } from "../../constants/app";
 import { Colors } from "../../theme";
 
 type Props = {
@@ -15,8 +16,6 @@ type Props = {
   questionCount: number;
   onQuestionCountChange: (value: number) => void;
 };
-
-const BUTTON_DROP = 56 * 2;
 
 function normalizeQuestionCount(value: number) {
   const clamped = Math.max(10, Math.min(100, value));
