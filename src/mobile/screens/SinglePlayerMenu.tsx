@@ -10,7 +10,8 @@ type Props = {
   onBack: () => void;
   onChoose: () => void;
   onCreate: () => void;
-  onRetryLogin: () => void;
+  onLogin: () => void;
+  hasAuth: boolean;
   waitingForLogin?: boolean;
   loginError?: string | null;
   questionCount: number;
@@ -26,87 +27,80 @@ export function SinglePlayerMenu({
   onBack,
   onChoose,
   onCreate,
-  onRetryLogin,
+  onLogin,
+  hasAuth,
   waitingForLogin,
   loginError,
   questionCount,
   onQuestionCountChange,
 }: Props) {
-  const showRetryLogin = !waitingForLogin && Boolean(loginError);
+  const loginBusy = Boolean(waitingForLogin);
+  const canStartQuiz = hasAuth && !loginBusy;
+  const loginLabel = hasAuth ? "Mit Spotify verbunden" : loginBusy ? "Bitte warten..." : "Mit Spotify verbinden";
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <AppHeader onBack={onBack} />
 
       <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: BUTTON_DROP, gap: 14 }}>
-        {waitingForLogin ? (
+        {loginBusy && (
           <View style={{ alignItems: "center", marginTop: 8 }}>
-            <ActivityIndicator size={56 as any} color={Colors.navy} />
-            <Text
-              style={{
-                marginTop: 14,
-                color: Colors.textOnBg,
-                fontSize: 20,
-                fontWeight: "700",
-                textAlign: "center",
-              }}
-            >
-              Warte auf Login...
-            </Text>
+            <ActivityIndicator size={48 as any} color={Colors.navy} />
           </View>
-        ) : showRetryLogin ? (
-          <>
-            <Text
-              style={{
-                marginTop: 12,
-                color: "red",
-                fontSize: 16,
-                fontWeight: "700",
-                textAlign: "center",
-              }}
-            >
-              Login fehlgeschlagen
-            </Text>
-            <BBButton title="Login erneut versuchen" onPress={onRetryLogin} />
-          </>
-        ) : (
-          <>
-            <View
-              style={{
-                backgroundColor: Colors.white,
-                borderRadius: 14,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-              }}
-            >
-              <Text
-                style={{
-                  color: Colors.textOnBg,
-                  fontWeight: "700",
-                  fontSize: 16,
-                  textAlign: "center",
-                }}
-              >
-                Fragen: {questionCount}
-              </Text>
-              <Slider
-                minimumValue={10}
-                maximumValue={100}
-                step={10}
-                value={questionCount}
-                minimumTrackTintColor={Colors.navy}
-                maximumTrackTintColor="rgba(15, 23, 42, 0.2)"
-                thumbTintColor={Colors.navy}
-                onValueChange={(value) => onQuestionCountChange(normalizeQuestionCount(value))}
-                onSlidingComplete={(value) =>
-                  onQuestionCountChange(normalizeQuestionCount(value))
-                }
-              />
-            </View>
+        )}
 
-            <BBButton title="Choose Quiz" onPress={onChoose} />
-            <BBButton title="Create Quiz" onPress={onCreate} />
-          </>
+        <View
+          style={{
+            backgroundColor: Colors.bg,
+            borderRadius: 14,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+          }}
+        >
+          <Text
+            style={{
+              color: Colors.textOnBg,
+              fontWeight: "700",
+              fontSize: 16,
+              textAlign: "center",
+            }}
+          >
+            Fragen: {questionCount}
+          </Text>
+          <Slider
+            minimumValue={10}
+            maximumValue={100}
+            step={10}
+            value={questionCount}
+            minimumTrackTintColor={Colors.navy}
+            maximumTrackTintColor="rgba(15, 23, 42, 0.2)"
+            thumbTintColor={Colors.navy}
+            onValueChange={(value) => onQuestionCountChange(normalizeQuestionCount(value))}
+            onSlidingComplete={(value) =>
+              onQuestionCountChange(normalizeQuestionCount(value))
+            }
+          />
+        </View>
+
+        <BBButton title="Choose Quiz" onPress={onChoose} disabled={!canStartQuiz} />
+        <BBButton title="Create Quiz" onPress={onCreate} disabled={!canStartQuiz} />
+
+        <View style={{ marginTop: 16 }}>
+          <BBButton title={loginLabel} onPress={onLogin} disabled={hasAuth || loginBusy} />
+        </View>
+
+        {!!loginError && !hasAuth && (
+          <Text
+            style={{
+              marginTop: 6,
+              color: "red",
+              fontSize: 15,
+              fontWeight: "700",
+              textAlign: "center",
+            }}
+          >
+            {loginError}
+          </Text>
         )}
       </View>
     </View>

@@ -28,7 +28,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BeatBrain nutzt die Kamera, um QR-Codes für Multiplayer-Sessions zu scannen."
+        }
+      ]
     ]
   }
 }

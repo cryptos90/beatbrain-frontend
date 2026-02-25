@@ -2,8 +2,8 @@ import { Asset } from "expo-asset";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, Keyboard, Linking, Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, AppState, FlatList, Keyboard, Linking, Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
 import { TIMER_SECONDS } from "../../constants/app";
 import {
@@ -18,21 +18,20 @@ import {
   consumeAuthResult,
   createQuizSession,
   deleteQuizSession,
-  getSpotifySdkAccessToken,
   getChoosePlaylists,
   loadNextQuizQuestion,
-  startSpotifyPlayback,
   stopSpotifyPlayback,
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
 import type { LobbyState, PlaylistCard, QuizQuestion, Screen } from "../../shared/types/app";
+import { openSpotifyApp } from "../services/spotifyAppRemote";
 import {
-  SpotifyAppRemoteError,
-  disconnectSpotifyAppRemote,
-  openSpotifyApp,
-  playTrackViaSpotifyAppRemote,
-} from "../services/spotifyAppRemote";
+  clearCachedSpotifyPlaybackDevice,
+  playTrackWithMinimalSpotifyRequests,
+  primeSpotifyPlaybackDevice,
+  resetSpotifyPlaybackWarmupState,
+} from "../services/spotifyPlaybackService";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -157,45 +156,6 @@ async function checkBackendHealth(apiBase: string, timeoutMs = 2500) {
   }
 }
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function toPlaybackErrorMessage(error: unknown): string | null {
-  if (error instanceof SpotifyAppRemoteError) {
-    if (error.code === "MODULE_MISSING") {
-      return null;
-    }
-    if (error.code === "IOS_ONLY") {
-      return null;
-    }
-    if (error.message) {
-      return error.message;
-    }
-    return "Spotify App Remote playback failed.";
-  }
-
-  if (error instanceof ApiHttpError) {
-    if (error.message) {
-      return error.message;
-    }
-    if (error.status === 404) {
-      return "No active Spotify device. Open Spotify and start playing something once.";
-    }
-    if (error.status === 403) {
-      return "Playback requires Spotify Premium / missing scope.";
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Spotify playback failed.";
-}
-
 function toReauthMessage(error: ApiHttpError) {
   const details = (error.details ?? {}) as any;
   const reason = String(details?.error?.reason ?? details?.reason ?? "").trim();
@@ -225,10 +185,20 @@ type LastQuizConfig = {
   decadeTag?: string;
 };
 
+type ActiveMultiplayerIdentity = {
+  joinCode: string;
+  name: string;
+  avatarDataUrl: string;
+};
+
+type PlayerSessionPayload = {
+  joinCode?: string;
+  playerSessionId?: string;
+};
+
 export function useBeatBrainController() {
   const [screen, setScreen] = useState<Screen>({ name: "start" });
   const [hostJwt, setHostJwt] = useState<string | null>(null);
-  const appRemoteTokenRef = useRef<{ accessToken: string; expiresAt: number } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [loginPending, setLoginPending] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -244,7 +214,6 @@ export function useBeatBrainController() {
   const [chooseViewMode, setChooseViewMode] = useState<ChooseViewMode>("normal");
   const [chooseLoading, setChooseLoading] = useState(false);
   const [chooseRetryAfterSeconds, setChooseRetryAfterSeconds] = useState<number | null>(null);
-  const [chooseReloadNonce, setChooseReloadNonce] = useState(0);
   const [questionCount, setQuestionCount] = useState(10);
   const [isStartingQuiz, setIsStartingQuiz] = useState(false);
   const isStartingQuizRef = useRef(false);
@@ -265,6 +234,10 @@ export function useBeatBrainController() {
   const timerAnim = useRef(new Animated.Value(1)).current;
   const [timerBarW, setTimerBarW] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoadingQuestionRef = useRef(false);
+  const lastQuestionLoadKeyRef = useRef<string | null>(null);
+  const playbackInFlightQuestionKeyRef = useRef<string | null>(null);
+  const playedQuestionKeyRef = useRef<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const [mpLobby, setMpLobby] = useState<LobbyState | null>(null);
@@ -279,12 +252,17 @@ export function useBeatBrainController() {
   const [mpAllAnswered, setMpAllAnswered] = useState(false);
   const [mpTimeUp, setMpTimeUp] = useState(false);
   const [mpAllContinued, setMpAllContinued] = useState(false);
+  const activeMultiplayerIdentityRef = useRef<ActiveMultiplayerIdentity | null>(null);
+  const playerSessionIdRef = useRef<string | null>(null);
+  const shouldAutoResumePlayerRef = useRef(false);
+  const playlistsLoadedForJwtRef = useRef<string | null>(null);
+  const playlistsLoadInFlightRef = useRef<Promise<void> | null>(null);
 
   const hasAuth = Boolean(hostJwt);
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
-    appRemoteTokenRef.current = null;
+    clearCachedSpotifyPlaybackDevice();
     void setStoredHostJwt(jwt);
   };
 
@@ -304,9 +282,124 @@ export function useBeatBrainController() {
     setChooseViewMode("normal");
   };
 
-  const reloadChoosePlaylists = () => {
-    setChooseReloadNonce((value) => value + 1);
-  };
+  const loadChoosePlaylists = useCallback(
+    async (options?: { force?: boolean; withUiState?: boolean }) => {
+      const jwtKey = String(hostJwt ?? "").trim();
+      if (!jwtKey) {
+        return;
+      }
+
+      const force = Boolean(options?.force);
+      const withUiState = Boolean(options?.withUiState);
+      const alreadyLoaded = playlistsLoadedForJwtRef.current === jwtKey;
+      if (alreadyLoaded && !force) {
+        if (withUiState) {
+          setChooseLoading(false);
+        }
+        return;
+      }
+
+      if (playlistsLoadInFlightRef.current) {
+        await playlistsLoadInFlightRef.current;
+        return;
+      }
+
+      const loadTask = (async () => {
+        if (withUiState) {
+          setChooseLoading(true);
+          setChooseViewMode("normal");
+          setChooseRetryAfterSeconds(null);
+          setPlaylistError(null);
+          setReauthRequired(false);
+          setReauthMessage(null);
+        }
+
+        try {
+          const resolved = await getChoosePlaylists(apiContext);
+          const cards = resolved.map((playlist) => ({
+            id: playlist.id,
+            title: playlist.name || playlist.id,
+            imageUrl: playlist.coverUrl || "",
+          }));
+          playlistsLoadedForJwtRef.current = jwtKey;
+          setPlaylists(cards);
+          setSelectedPlaylistIndex((index) => Math.max(0, Math.min(index, cards.length - 1)));
+
+          if (withUiState) {
+            if (!cards.length) {
+              setPlaylistError("Keine Playlists gefunden.");
+              setChooseViewMode("error");
+            } else {
+              setChooseViewMode("normal");
+            }
+            setReauthRequired(false);
+            setReauthMessage(null);
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.error("[choose] playlist resolve failed", error);
+          }
+
+          playlistsLoadedForJwtRef.current = null;
+          setPlaylists([]);
+
+          if (!withUiState) {
+            return;
+          }
+
+          let message = "Playlists konnten nicht geladen werden.";
+          if (error instanceof ApiHttpError) {
+            if (error.status === 429) {
+              const seconds =
+                typeof error.retryAfterSeconds === "number" && Number.isFinite(error.retryAfterSeconds)
+                  ? Math.max(1, Math.ceil(error.retryAfterSeconds))
+                  : null;
+              setChooseRetryAfterSeconds(seconds);
+              setReauthRequired(false);
+              setReauthMessage(null);
+              message = seconds
+                ? `Spotify rate-limited. Try again in ${seconds}s.`
+                : "Spotify rate-limited. Try again soon.";
+            } else if (error.status === 401) {
+              setReauthRequired(false);
+              setReauthMessage(null);
+              message = "Session abgelaufen, bitte erneut einloggen";
+            } else if (error.status === 409) {
+              setReauthRequired(true);
+              setReauthMessage(
+                toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
+              );
+              message = toShortUiMessage(error.message, "Re-login erforderlich.");
+            } else if (error.message) {
+              setReauthRequired(false);
+              setReauthMessage(null);
+              message = toShortUiMessage(error.message, "Playlists konnten nicht geladen werden.");
+            }
+          } else {
+            setReauthRequired(false);
+            setReauthMessage(null);
+          }
+
+          setPlaylistError(message);
+          setChooseViewMode("error");
+        } finally {
+          if (withUiState) {
+            setChooseLoading(false);
+          }
+        }
+      })();
+
+      playlistsLoadInFlightRef.current = loadTask;
+      try {
+        await loadTask;
+      } finally {
+        if (playlistsLoadInFlightRef.current === loadTask) {
+          playlistsLoadInFlightRef.current = null;
+        }
+      }
+    },
+    [apiContext, hostJwt],
+  );
 
   const stopTimer = () => {
     if (timeoutRef.current) {
@@ -336,40 +429,6 @@ export function useBeatBrainController() {
     setPickedOption(null);
   };
 
-  const startBackendPlaybackWithDeviceWarmup = async (trackUri: string) => {
-    try {
-      await startSpotifyPlayback(apiContext, { trackUri });
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : "";
-      const noActiveDevice =
-        (error instanceof ApiHttpError && error.status === 404) ||
-        message.includes("no active spotify device");
-      if (!noActiveDevice) {
-        throw error;
-      }
-
-      let lastError: unknown = error;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        await wait(700);
-        try {
-          await startSpotifyPlayback(apiContext, { trackUri });
-          return;
-        } catch (retryError) {
-          const isNoActiveDevice =
-            (retryError instanceof ApiHttpError && retryError.status === 404) ||
-            (retryError instanceof Error &&
-              retryError.message.toLowerCase().includes("no active spotify device"));
-          if (!isNoActiveDevice) {
-            throw retryError;
-          }
-          lastError = retryError;
-        }
-      }
-      throw lastError;
-    }
-  };
-
   const stopQuizPlayback = async () => {
     try {
       await stopSpotifyPlayback(apiContext);
@@ -378,9 +437,16 @@ export function useBeatBrainController() {
     }
   };
 
-  const cleanupQuizSession = async () => {
+  const cleanupQuizSession = async (options?: { skipStopPlayback?: boolean }) => {
     stopTimer();
-    await stopQuizPlayback();
+    if (!options?.skipStopPlayback) {
+      await stopQuizPlayback();
+    }
+    isLoadingQuestionRef.current = false;
+    lastQuestionLoadKeyRef.current = null;
+    playbackInFlightQuestionKeyRef.current = null;
+    playedQuestionKeyRef.current = null;
+    resetSpotifyPlaybackWarmupState();
     if (!quizSessionId) {
       return;
     }
@@ -393,7 +459,22 @@ export function useBeatBrainController() {
     setQuizSessionId(null);
   };
 
+  const emitPlayerJoin = useCallback(
+    (socket: Socket, identity: ActiveMultiplayerIdentity, playerSessionId?: string | null) => {
+      socket.emit("player:join", {
+        joinCode: identity.joinCode,
+        name: identity.name,
+        avatarDataUrl: identity.avatarDataUrl,
+        ...(playerSessionId ? { playerSessionId } : {}),
+      });
+    },
+    [],
+  );
+
   const resetMultiplayerState = () => {
+    activeMultiplayerIdentityRef.current = null;
+    playerSessionIdRef.current = null;
+    shouldAutoResumePlayerRef.current = false;
     setMpLobby(null);
     setMpQuestion(null);
     setMpCorrectAnswer(null);
@@ -417,6 +498,34 @@ export function useBeatBrainController() {
 
     const socket = io(API_BASE_URL, {
       transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 900,
+      reconnectionDelayMax: 4_000,
+    });
+
+    socket.on("connect", () => {
+      if (!shouldAutoResumePlayerRef.current) {
+        return;
+      }
+
+      const identity = activeMultiplayerIdentityRef.current;
+      const playerSessionId = playerSessionIdRef.current;
+      if (!identity || !playerSessionId) {
+        return;
+      }
+
+      emitPlayerJoin(socket, identity, playerSessionId);
+    });
+
+    socket.on("player:session", (payload: PlayerSessionPayload) => {
+      const normalizedPlayerSessionId = String(payload?.playerSessionId ?? "").trim();
+      if (!normalizedPlayerSessionId) {
+        return;
+      }
+      playerSessionIdRef.current = normalizedPlayerSessionId;
+      shouldAutoResumePlayerRef.current = true;
+      setMpJoinError(null);
     });
 
     socket.on("lobby:state", (state: LobbyState) => {
@@ -592,13 +701,15 @@ export function useBeatBrainController() {
       return;
     }
 
-    setMpJoinError(null);
-    const socket = connectSocket();
-    socket.emit("player:join", {
+    const identity = {
       joinCode,
       name,
       avatarDataUrl,
-    });
+    };
+    activeMultiplayerIdentityRef.current = identity;
+    setMpJoinError(null);
+    const socket = connectSocket();
+    emitPlayerJoin(socket, identity, playerSessionIdRef.current);
   };
 
   const playerAnswer = (answer: string) => {
@@ -629,6 +740,48 @@ export function useBeatBrainController() {
     socket.emit("player:continue", {
       joinCode: mpLobby.joinCode,
     });
+  };
+
+  const leaveMultiplayerSession = async () => {
+    const fallbackJoinCode = activeMultiplayerIdentityRef.current?.joinCode ?? "";
+    const joinCode = (mpLobby?.joinCode ?? fallbackJoinCode).trim().toUpperCase();
+    const playerSessionId = playerSessionIdRef.current;
+    const socket = socketRef.current;
+
+    shouldAutoResumePlayerRef.current = false;
+
+    if (socket && socket.connected && joinCode) {
+      const payload = {
+        joinCode,
+        ...(playerSessionId ? { playerSessionId } : {}),
+      };
+
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve();
+        };
+
+        try {
+          socket.timeout(700).emit("player:leave", payload, () => {
+            finish();
+          });
+        } catch {
+          finish();
+          return;
+        }
+
+        setTimeout(() => {
+          finish();
+        }, 760);
+      });
+    }
+
+    resetMultiplayerState();
   };
 
   const handleAuthRedirect = async (url: string) => {
@@ -847,16 +1000,18 @@ export function useBeatBrainController() {
 
   const retryChooseLoad = async () => {
     clearChooseErrorState();
-    reloadChoosePlaylists();
+    await loadChoosePlaylists({ force: true, withUiState: true });
   };
 
   const reloginChoose = async () => {
     clearChooseErrorState();
+    playlistsLoadedForJwtRef.current = null;
+    setPlaylists([]);
     await startSpotifyLogin();
     const storedJwt = await getStoredHostJwt();
     if (storedJwt) {
       setScreen({ name: "choose" });
-      reloadChoosePlaylists();
+      await loadChoosePlaylists({ force: true, withUiState: true });
     }
   };
 
@@ -900,6 +1055,11 @@ export function useBeatBrainController() {
     setTotalQuestions(effectiveQuestionCount);
     setQuizPlaybackError(null);
     setQuizPlaybackCanOpenSpotify(false);
+    isLoadingQuestionRef.current = false;
+    lastQuestionLoadKeyRef.current = null;
+    playbackInFlightQuestionKeyRef.current = null;
+    playedQuestionKeyRef.current = null;
+    resetSpotifyPlaybackWarmupState();
 
     try {
       const session = await createQuizSession(apiContext, {
@@ -916,6 +1076,7 @@ export function useBeatBrainController() {
         decadeTag,
       });
       setScreen({ name: "quiz", playlistTitle });
+      void primeSpotifyPlaybackDevice(apiContext);
     } catch (error) {
       if (error instanceof ApiHttpError) {
         const message = toShortUiMessage(
@@ -951,72 +1112,80 @@ export function useBeatBrainController() {
     await beginQuizForPlaylist(playlistId, playlistId || "Custom Playlist");
   };
 
-  const getValidSpotifySdkToken = async () => {
-    const cached = appRemoteTokenRef.current;
-    if (cached && cached.accessToken && Date.now() < cached.expiresAt - 30_000) {
-      return cached.accessToken;
-    }
-
-    const tokenPayload = await getSpotifySdkAccessToken(apiContext);
-    const accessToken = String(tokenPayload.accessToken ?? "").trim();
-    if (!accessToken) {
-      throw new Error("Spotify SDK token unavailable.");
-    }
-
-    const expiresInSecondsRaw = Number(tokenPayload.expiresIn ?? 0);
-    const expiresInSeconds = Number.isFinite(expiresInSecondsRaw)
-      ? Math.max(30, Math.floor(expiresInSecondsRaw))
-      : 300;
-    appRemoteTokenRef.current = {
-      accessToken,
-      expiresAt: Date.now() + expiresInSeconds * 1000,
-    };
-    return accessToken;
-  };
-
   const loadNextQuestion = async () => {
-    if (!quizSessionId) {
+    if (!quizSessionId || isLoadingQuestionRef.current) {
       return;
     }
 
-    const data = await loadNextQuizQuestion(apiContext, quizSessionId);
-    if (data.done) {
-      await cleanupQuizSession();
-      setCurrentQuestion(null);
-      setScreen({ name: "results" });
+    const loadKey = `${quizSessionId}:${qIndex}`;
+    if (lastQuestionLoadKeyRef.current === loadKey) {
       return;
     }
 
-    const question = data.question as QuizQuestion;
-    setCurrentQuestion(question);
-    setQuizPlaybackError(null);
-    setQuizPlaybackCanOpenSpotify(false);
-    resetQuestionUi();
-    startTimer();
+    lastQuestionLoadKeyRef.current = loadKey;
+    isLoadingQuestionRef.current = true;
+    try {
+      const data = await loadNextQuizQuestion(apiContext, quizSessionId);
+      if (data.done) {
+        await cleanupQuizSession();
+        setCurrentQuestion(null);
+        setScreen({ name: "results" });
+        return;
+      }
 
-    const trackUri = typeof question?.correctTrackUri === "string" ? question.correctTrackUri : "";
-    if (trackUri) {
+      const question = data.question as QuizQuestion;
+      const questionPlaybackKey = `${quizSessionId}:${String(
+        question?.correctSongId ?? "",
+      )}:${qIndex}`;
+      setCurrentQuestion(question);
+      setQuizPlaybackError(null);
+      setQuizPlaybackCanOpenSpotify(false);
+      resetQuestionUi();
+      startTimer();
+
+      const trackUri =
+        typeof question?.correctTrackUri === "string" ? question.correctTrackUri : "";
+      if (!trackUri) {
+        playedQuestionKeyRef.current = questionPlaybackKey;
+        return;
+      }
+
+      if (
+        playedQuestionKeyRef.current === questionPlaybackKey ||
+        playbackInFlightQuestionKeyRef.current === questionPlaybackKey
+      ) {
+        return;
+      }
+
+      playbackInFlightQuestionKeyRef.current = questionPlaybackKey;
       try {
-        const spotifySdkAccessToken = await getValidSpotifySdkToken();
-        await playTrackViaSpotifyAppRemote(trackUri, spotifySdkAccessToken);
-        setQuizPlaybackError(null);
-        setQuizPlaybackCanOpenSpotify(false);
-      } catch {
-        try {
-          await startBackendPlaybackWithDeviceWarmup(trackUri);
+        const playbackResult = await playTrackWithMinimalSpotifyRequests(apiContext, trackUri);
+        if (playbackResult.ok) {
           setQuizPlaybackError(null);
           setQuizPlaybackCanOpenSpotify(false);
-        } catch (fallbackError) {
-          const playbackMessage = toPlaybackErrorMessage(fallbackError);
-          setQuizPlaybackError(playbackMessage);
-          setQuizPlaybackCanOpenSpotify(Boolean(playbackMessage));
+        } else {
+          setQuizPlaybackError(playbackResult.message);
+          setQuizPlaybackCanOpenSpotify(playbackResult.canOpenSpotify);
+        }
+        playedQuestionKeyRef.current = questionPlaybackKey;
+      } finally {
+        if (playbackInFlightQuestionKeyRef.current === questionPlaybackKey) {
+          playbackInFlightQuestionKeyRef.current = null;
         }
       }
+    } catch (error) {
+      lastQuestionLoadKeyRef.current = null;
+      if (__DEV__) {
+        console.debug("[quiz] loadNextQuestion failed", error);
+      }
+    } finally {
+      isLoadingQuestionRef.current = false;
     }
   };
 
   const leaveQuizToMenu = async () => {
-    await cleanupQuizSession();
+    await stopQuizPlayback();
+    await cleanupQuizSession({ skipStopPlayback: true });
     setCurrentQuestion(null);
     setScreen({ name: "singleMenu" });
   };
@@ -1126,104 +1295,42 @@ export function useBeatBrainController() {
   }, []);
 
   useEffect(() => {
+    const jwtKey = String(hostJwt ?? "").trim();
+    if (!jwtKey) {
+      playlistsLoadedForJwtRef.current = null;
+      setPlaylists([]);
+      return;
+    }
+
+    if (playlistsLoadedForJwtRef.current !== jwtKey) {
+      setPlaylists([]);
+      playlistsLoadedForJwtRef.current = null;
+    }
+
+    void loadChoosePlaylists({ withUiState: false });
+  }, [hostJwt, loadChoosePlaylists]);
+
+  useEffect(() => {
     if (!hasAuth || screen.name !== "choose") {
       return;
     }
 
-    let cancelled = false;
-
-    const loadPlaylists = async () => {
-      setChooseLoading(true);
-      setChooseViewMode("normal");
-      setChooseRetryAfterSeconds(null);
-      setPlaylistError(null);
-      setReauthRequired(false);
-      setReauthMessage(null);
-      try {
-        const resolved = await getChoosePlaylists(apiContext);
-        if (cancelled) {
-          return;
-        }
-
-        if (!resolved.length) {
-          setPlaylistError("Keine Playlists gefunden.");
-          setReauthRequired(false);
-          setReauthMessage(null);
-          setChooseViewMode("error");
-          setPlaylists([]);
-          return;
-        }
-
-        const cards = resolved.map((playlist) => ({
-          id: playlist.id,
-          title: playlist.name || playlist.id,
-          imageUrl: playlist.coverUrl || "",
-        }));
-        setPlaylists(cards);
-        setSelectedPlaylistIndex((index) =>
-          Math.max(0, Math.min(index, cards.length - 1)),
-        );
-        setChooseViewMode("normal");
+    const jwtKey = String(hostJwt ?? "").trim();
+    if (playlistsLoadedForJwtRef.current === jwtKey) {
+      setChooseLoading(false);
+      if (!playlists.length) {
+        setPlaylistError("Keine Playlists gefunden.");
         setReauthRequired(false);
         setReauthMessage(null);
-        setPlaylistError(null);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        if (__DEV__) {
-          console.error("[choose] playlist resolve failed", error);
-        }
-
-        let message = "Playlists konnten nicht geladen werden.";
-        if (error instanceof ApiHttpError) {
-          if (error.status === 429) {
-            const seconds =
-              typeof error.retryAfterSeconds === "number" && Number.isFinite(error.retryAfterSeconds)
-                ? Math.max(1, Math.ceil(error.retryAfterSeconds))
-                : null;
-            setChooseRetryAfterSeconds(seconds);
-            setReauthRequired(false);
-            setReauthMessage(null);
-            message = seconds
-              ? `Spotify rate-limited. Try again in ${seconds}s.`
-              : "Spotify rate-limited. Try again soon.";
-          } else if (error.status === 401) {
-            setReauthRequired(false);
-            setReauthMessage(null);
-            message = "Session abgelaufen, bitte erneut einloggen";
-          } else if (error.status === 409) {
-            setReauthRequired(true);
-            setReauthMessage(
-              toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
-            );
-            message = toShortUiMessage(error.message, "Re-login erforderlich.");
-          } else if (error.message) {
-            setReauthRequired(false);
-            setReauthMessage(null);
-            message = toShortUiMessage(error.message, "Playlists konnten nicht geladen werden.");
-          }
-        } else {
-          setReauthRequired(false);
-          setReauthMessage(null);
-        }
-        setPlaylistError(message);
         setChooseViewMode("error");
-        setPlaylists([]);
-      } finally {
-        if (!cancelled) {
-          setChooseLoading(false);
-        }
+      } else {
+        clearChooseErrorState();
       }
-    };
+      return;
+    }
 
-    void loadPlaylists();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [apiContext, chooseReloadNonce, hasAuth, screen.name]);
+    void loadChoosePlaylists({ withUiState: true });
+  }, [hasAuth, hostJwt, playlists.length, screen.name, loadChoosePlaylists]);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -1267,6 +1374,40 @@ export function useBeatBrainController() {
   }, [pendingAuthState]);
 
   useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        return;
+      }
+
+      const socket = socketRef.current;
+      if (!socket || !shouldAutoResumePlayerRef.current) {
+        return;
+      }
+
+      const identity = activeMultiplayerIdentityRef.current;
+      const playerSessionId = playerSessionIdRef.current;
+      if (!identity || !playerSessionId) {
+        return;
+      }
+
+      if (socket.disconnected) {
+        socket.connect();
+        return;
+      }
+
+      emitPlayerJoin(socket, identity, playerSessionId);
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [emitPlayerJoin]);
+
+  useEffect(() => {
     if (screen.name === "quiz" && quizSessionId) {
       void loadNextQuestion();
     }
@@ -1275,6 +1416,11 @@ export function useBeatBrainController() {
   useEffect(() => {
     if (screen.name !== "quiz") {
       stopTimer();
+      isLoadingQuestionRef.current = false;
+      lastQuestionLoadKeyRef.current = null;
+      playbackInFlightQuestionKeyRef.current = null;
+      playedQuestionKeyRef.current = null;
+      resetSpotifyPlaybackWarmupState();
       setQuizPlaybackError(null);
       setQuizPlaybackCanOpenSpotify(false);
     }
@@ -1292,7 +1438,8 @@ export function useBeatBrainController() {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
-      void disconnectSpotifyAppRemote();
+      resetSpotifyPlaybackWarmupState();
+      clearCachedSpotifyPlaybackDevice();
       stopTimer();
     };
   }, []);
@@ -1369,6 +1516,7 @@ export function useBeatBrainController() {
     joinAsPlayer,
     playerAnswer,
     playerContinue,
+    leaveMultiplayerSession,
     resetMultiplayerState,
   };
 }

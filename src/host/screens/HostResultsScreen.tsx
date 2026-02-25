@@ -1,9 +1,9 @@
 import React from "react";
 import { Image, ScrollView, Text, View } from "react-native";
-import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { HostLayout } from "../components/HostLayout";
 
 type Props = {
   lobby: LobbyState | null;
@@ -11,6 +11,7 @@ type Props = {
   socketError: string | null;
   onRestartQuiz: () => void;
   onReturnToMenu: () => void;
+  notice?: string | null;
 };
 
 export function HostResultsScreen({
@@ -19,28 +20,13 @@ export function HostResultsScreen({
   socketError,
   onRestartQuiz,
   onReturnToMenu,
+  notice,
 }: Props) {
   const sortedPlayers = [...(lobby?.players ?? [])].sort((a, b) => b.score - a.score);
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <AppHeader onBack={() => {}} />
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, gap: 12 }}
-      >
-        <Text
-          style={{
-            color: Colors.textOnBg,
-            fontSize: 30,
-            fontWeight: "900",
-            textAlign: "center",
-          }}
-        >
-          Ergebnisse
-        </Text>
-
+    <HostLayout notice={notice}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 8, paddingBottom: 24, gap: 12 }}>
         {sortedPlayers.map((player, index) => (
           <View
             key={player.id}
@@ -73,7 +59,7 @@ export function HostResultsScreen({
         ))}
 
         {!!socketError && (
-          <Text style={{ color: "red", textAlign: "center", fontWeight: "700" }}>
+          <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
             {socketError}
           </Text>
         )}
@@ -84,11 +70,11 @@ export function HostResultsScreen({
           disabled={actionBusy}
         />
         <BBButton
-          title={actionBusy ? "Bitte warten..." : "Return zu Menü"}
+          title={actionBusy ? "Bitte warten..." : "Return zu Menu"}
           onPress={onReturnToMenu}
           disabled={actionBusy}
         />
       </ScrollView>
-    </View>
+    </HostLayout>
   );
 }

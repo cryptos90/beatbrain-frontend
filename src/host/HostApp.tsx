@@ -1,20 +1,27 @@
 import React from "react";
 import { HostLobbyScreen } from "./screens/HostLobbyScreen";
 import { HostLoginScreen } from "./screens/HostLoginScreen";
+import { HostQuizCreateScreen } from "./screens/HostQuizCreateScreen";
 import { HostQuizScreen } from "./screens/HostQuizScreen";
 import { HostQuizSetupScreen } from "./screens/HostQuizSetupScreen";
+import { HostSetupModeScreen } from "./screens/HostSetupModeScreen";
 import { HostResultsScreen } from "./screens/HostResultsScreen";
 import { useHostController } from "./hooks/useHostController";
 
 export function HostApp() {
   const app = useHostController();
 
-  if (!app.hasAuth || app.screen === "login") {
+  if (app.screen === "start") {
     return (
       <HostLoginScreen
+        hasAuth={app.hasAuth}
         authBusy={app.authBusy}
         authError={app.authError}
+        creatingLobby={app.creatingLobby}
+        socketError={app.socketError}
         onLogin={app.startSpotifyLogin}
+        onStartSession={app.createLobby}
+        notice={app.routeNotice}
       />
     );
   }
@@ -24,29 +31,49 @@ export function HostApp() {
       <HostLobbyScreen
         lobby={app.lobby}
         joinUrl={app.joinUrl}
-        creatingLobby={app.creatingLobby}
         socketError={app.socketError}
         canOpenSetup={app.canOpenSetup}
-        onCreateLobby={app.createLobby}
         onOpenSetup={app.openSetup}
+        notice={app.routeNotice}
       />
     );
   }
 
-  if (app.screen === "setup") {
+  if (app.screen === "setupMode") {
+    return (
+      <HostSetupModeScreen
+        questionCount={app.questionCount}
+        onQuestionCountChange={app.setQuestionCount}
+        onChooseMode={app.openSetupChoose}
+        onCreateMode={app.openSetupCreate}
+        notice={app.routeNotice}
+      />
+    );
+  }
+
+  if (app.screen === "setupChoose") {
     return (
       <HostQuizSetupScreen
         playlists={app.playlists}
         selectedPlaylistIndex={app.selectedPlaylistIndex}
-        questionCount={app.questionCount}
+        setupError={app.setupError}
+        creatingSession={app.creatingSession}
+        onSelectPlaylistIndex={app.setSelectedPlaylistIndex}
+        onCreateSession={app.createSessionFromChoose}
+        notice={app.routeNotice}
+      />
+    );
+  }
+
+  if (app.screen === "setupCreate") {
+    return (
+      <HostQuizCreateScreen
         playlistIdInput={app.playlistIdInput}
         setupError={app.setupError}
         creatingSession={app.creatingSession}
-        onBack={app.openLobby}
-        onQuestionCountChange={app.setQuestionCount}
-        onSelectPlaylistIndex={app.setSelectedPlaylistIndex}
         onPlaylistIdInputChange={app.setPlaylistIdInput}
-        onCreateSession={app.createSession}
+        onCreateSession={app.createSessionFromCreate}
+        notice={app.routeNotice}
       />
     );
   }
@@ -66,11 +93,7 @@ export function HostApp() {
         countdownMs={app.countdownMs}
         readyCount={app.readyCount}
         totalPlayers={app.totalPlayers}
-        canStartRound={app.canStartRound}
-        canReveal={app.canReveal}
-        onBack={app.openSetup}
-        onStartRound={app.startRound}
-        onReveal={app.revealRound}
+        notice={app.routeNotice}
       />
     );
   }
@@ -82,6 +105,7 @@ export function HostApp() {
       socketError={app.socketError}
       onRestartQuiz={app.restartQuiz}
       onReturnToMenu={app.returnToMenu}
+      notice={app.routeNotice}
     />
   );
 }

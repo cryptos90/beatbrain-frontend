@@ -17,7 +17,7 @@ export function BackButton({ onPress, style }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Zurueck"
+      accessibilityLabel="Zurück"
       style={({ pressed }) => [
         {
           width: BACK_BTN_SIZE,

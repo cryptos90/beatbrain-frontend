@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Image,
-  Modal,
   Pressable,
   Text,
   TextInput,
@@ -56,7 +55,6 @@ export function QuizView({
   onNextOrFinish,
 }: Props) {
   const [yearInput, setYearInput] = useState("");
-  const [playbackModalVisible, setPlaybackModalVisible] = useState(false);
 
   useEffect(() => {
     setYearInput("");
@@ -67,10 +65,6 @@ export function QuizView({
       setYearInput("");
     }
   }, [revealed]);
-
-  useEffect(() => {
-    setPlaybackModalVisible(Boolean(playbackError && playbackCanOpenSpotify));
-  }, [playbackCanOpenSpotify, playbackError]);
 
   if (!currentQuestion) {
     return (
@@ -199,12 +193,6 @@ export function QuizView({
         </View>
       </View>
 
-      {!!playbackError && (
-        <Text style={{ marginTop: 8, textAlign: "center", color: "#92400e", fontWeight: "700" }}>
-          {playbackError}
-        </Text>
-      )}
-
       <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 14 }}>
         <View
           style={{
@@ -260,7 +248,7 @@ export function QuizView({
               />
               <View style={{ marginTop: 12 }}>
                 <BBButton
-                  title="Antwort pruefen"
+                  title="Antwort prüfen"
                   disabled={revealed || yearInput.trim().length === 0}
                   onPress={() => onSubmitYearInput(yearInput)}
                 />
@@ -414,66 +402,52 @@ export function QuizView({
         )}
       </View>
 
-      <Modal
-        transparent
-        animationType="fade"
-        visible={playbackModalVisible}
-        onRequestClose={() => setPlaybackModalVisible(false)}
-      >
+      {!!playbackError && (
         <View
+          pointerEvents="box-none"
           style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.45)",
+            position: "absolute",
+            top: HEADER_PAD_TOP + BACK_BTN_SIZE + 36,
+            left: 0,
+            right: 0,
+            zIndex: 20,
             alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 22,
+            paddingHorizontal: 18,
           }}
         >
           <View
+            pointerEvents={playbackCanOpenSpotify ? "auto" : "none"}
             style={{
               width: "100%",
-              maxWidth: 420,
-              backgroundColor: Colors.bg,
-              borderRadius: Radius.xl,
-              padding: 18,
+              maxWidth: 520,
+              backgroundColor: "rgba(31, 47, 79, 0.96)",
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.22)",
+              paddingVertical: 12,
+              paddingHorizontal: 12,
             }}
           >
             <Text
               style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: Colors.textOnBg,
                 textAlign: "center",
+                color: Colors.textOnNavy,
+                fontWeight: "700",
               }}
             >
-              Spotify Verbindung
+              {playbackError}
             </Text>
-            <Text
-              style={{
-                marginTop: 10,
-                color: Colors.textOnBg,
-                textAlign: "center",
-              }}
-            >
-              {playbackError ?? "Spotify App konnte nicht verbunden werden."}
-            </Text>
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <BBButton
-                title="Spotify oeffnen"
-                onPress={() => {
-                  setPlaybackModalVisible(false);
-                  void onOpenSpotifyApp();
-                }}
-              />
-              <BBButton
-                title="Schliessen"
-                onPress={() => setPlaybackModalVisible(false)}
-                style={{ backgroundColor: "#1f2f4f" }}
-              />
-            </View>
+            {playbackCanOpenSpotify && (
+                <View style={{ marginTop: 10, alignItems: "center" }}>
+                  <View style={{ width: "72%", maxWidth: 280 }}>
+                    <BBButton title="Spotify öffnen" onPress={onOpenSpotifyApp} />
+                  </View>
+                </View>
+              )}
           </View>
         </View>
-      </Modal>
+      )}
+
     </View>
   );
 }

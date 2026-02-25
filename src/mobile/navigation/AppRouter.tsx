@@ -21,9 +21,8 @@ export function AppRouter({ app }: Props) {
       <>
         <StatusBar hidden />
         <StartScreen
-          onSinglePlayer={async () => {
+          onSinglePlayer={() => {
             app.setScreen({ name: "singleMenu" });
-            await app.ensureSpotifyLogin();
           }}
           onMultiplayer={() => {
             app.resetMultiplayerState();
@@ -39,9 +38,10 @@ export function AppRouter({ app }: Props) {
       <>
         <StatusBar hidden />
         <SinglePlayerMenu
-          waitingForLogin={!app.hasAuth && app.loginPending}
+          hasAuth={app.hasAuth}
+          waitingForLogin={!app.hasAuth && (app.loginPending || app.authBusy)}
           loginError={!app.hasAuth ? app.authError : null}
-          onRetryLogin={app.startSpotifyLogin}
+          onLogin={app.startSpotifyLogin}
           onBack={() => app.setScreen({ name: "start" })}
           onChoose={() => app.setScreen({ name: "choose" })}
           onCreate={() => app.setScreen({ name: "create" })}
@@ -182,7 +182,7 @@ export function AppRouter({ app }: Props) {
           timeUp={app.mpTimeUp}
           allContinued={app.mpAllContinued}
           onBack={() => {
-            app.resetMultiplayerState();
+            app.leaveMultiplayerSession();
             app.setScreen({ name: "start" });
           }}
           onAnswer={app.playerAnswer}
@@ -199,7 +199,7 @@ export function AppRouter({ app }: Props) {
         lobby={app.mpLobby}
         onRestart={() => {}}
         onReturnMenu={() => {
-          app.resetMultiplayerState();
+          app.leaveMultiplayerSession();
           app.setScreen({ name: "start" });
         }}
       />

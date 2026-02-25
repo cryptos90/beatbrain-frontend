@@ -3,6 +3,13 @@ import type { ChoosePlaylist } from "../types/app";
 import type { ApiClientContext, JsonRecord } from "./apiClient";
 import { requestJson } from "./apiClient";
 
+export type SpotifyPlayerDevice = {
+  id: string;
+  name: string;
+  type: string;
+  is_active: boolean;
+};
+
 export async function startSpotifyAuth(
   clientType: "mobile" | "web",
   options?: { redirectOrigin?: string },
@@ -63,10 +70,17 @@ export async function getSpotifySdkAccessToken(context: ApiClientContext) {
 
 export async function startSpotifyPlayback(
   context: ApiClientContext,
-  payload: { trackUri: string; deviceId?: string },
+  payload: { trackUri: string; deviceId?: string; positionMs?: number },
 ) {
-  return requestJson(context, "/spotify/playback/play", {
-    method: "POST",
+  return playSpotifyTrack(context, payload);
+}
+
+export async function playSpotifyTrack(
+  context: ApiClientContext,
+  payload: { trackUri: string; deviceId?: string; positionMs?: number },
+) {
+  return requestJson(context, "/spotify/player/play", {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }
@@ -79,6 +93,24 @@ export async function stopSpotifyPlayback(
     method: "POST",
     body: JSON.stringify(payload ?? {}),
   });
+}
+
+export async function getSpotifyPlayerDevices(
+  context: ApiClientContext,
+): Promise<SpotifyPlayerDevice[]> {
+  const payload = (await requestJson(context, "/spotify/player/devices", {
+    method: "GET",
+  })) as JsonRecord;
+
+  const rawDevices = Array.isArray(payload?.devices) ? payload.devices : [];
+  return rawDevices
+    .map((entry) => ({
+      id: String((entry as any)?.id ?? "").trim(),
+      name: String((entry as any)?.name ?? "").trim(),
+      type: String((entry as any)?.type ?? "").trim(),
+      is_active: Boolean((entry as any)?.is_active),
+    }))
+    .filter((entry) => Boolean(entry.id));
 }
 
 export async function getChoosePlaylists(

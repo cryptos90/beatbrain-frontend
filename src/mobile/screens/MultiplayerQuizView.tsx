@@ -1,7 +1,13 @@
-import React from "react";
-import { Image, Pressable, Text, View } from "react-native";
-import { AppHeader } from "../../components/AppHeader";
+import React, { useEffect, useState } from "react";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
+import { BackButton } from "../../components/BackButton";
 import { BBButton } from "../../components/BBButton";
+import {
+  BACK_BTN_SIZE,
+  HEADER_PAD_TOP,
+  QUIZ_LOGO_HEIGHT,
+  QUIZ_LOGO_WIDTH,
+} from "../../constants/app";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState, QuizQuestion } from "../../shared/types/app";
 
@@ -32,17 +38,52 @@ export function MultiplayerQuizView({
   onAnswer,
   onContinue,
 }: Props) {
+  const [yearInput, setYearInput] = useState("");
+
+  useEffect(() => {
+    setYearInput("");
+  }, [question?.correctSongId]);
+
+  const optionRows = question
+    ? question.options.length <= 2
+      ? [question.options]
+      : [question.options.slice(0, 2), question.options.slice(2, 4)]
+    : [];
+  const isYearInputQuestion = Boolean(
+    question &&
+      (question.questionObject.format === "year_input" ||
+        question.questionObject.answerType === "year-input"),
+  );
+  const isAnswerLocked = playerAnswered || Boolean(correctAnswer);
+  const canSubmitYearInput = !isAnswerLocked && yearInput.trim().length > 0;
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <AppHeader onBack={onBack} />
+      <View style={{ paddingTop: HEADER_PAD_TOP, paddingHorizontal: 18 }}>
+        <View
+          style={{
+            height: BACK_BTN_SIZE,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <BackButton onPress={onBack} />
+          <Image
+            source={require("../../../assets/logo.png")}
+            resizeMode="contain"
+            style={{ width: QUIZ_LOGO_WIDTH, height: QUIZ_LOGO_HEIGHT }}
+          />
+        </View>
+      </View>
 
-      <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 10, gap: 10 }}>
+      <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18, gap: 14 }}>
         {!!lobby && (
           <Text
             style={{
               color: Colors.textOnBg,
               textAlign: "center",
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: "800",
             }}
           >
@@ -52,7 +93,7 @@ export function MultiplayerQuizView({
 
         {!question && (
           <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
-            Waiting for host to start the next round...
+            Warten auf die nächste Runde...
           </Text>
         )}
 
@@ -62,14 +103,15 @@ export function MultiplayerQuizView({
               style={{
                 backgroundColor: Colors.navy,
                 borderRadius: Radius.xl,
-                paddingVertical: 22,
+                paddingVertical: 20,
                 paddingHorizontal: 14,
+                alignItems: "center",
               }}
             >
               <Text
                 style={{
                   color: Colors.textOnNavy,
-                  fontSize: 20,
+                  fontSize: 22,
                   fontWeight: "800",
                   textAlign: "center",
                 }}
@@ -78,118 +120,103 @@ export function MultiplayerQuizView({
               </Text>
             </View>
 
-            <View style={{ gap: 10 }}>
-              {question.options.map((option) => {
-                const isCorrect = correctAnswer ? option === correctAnswer : false;
-                const isWrongSelected =
-                  Boolean(correctAnswer) &&
-                  !isCorrect &&
-                  playerAnswered &&
-                  lobby?.status === "reveal";
-
-                let backgroundColor = Colors.navy;
-                if (correctAnswer) {
-                  if (isCorrect) {
-                    backgroundColor = "green";
-                  } else if (isWrongSelected) {
-                    backgroundColor = "red";
-                  }
-                }
-
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => onAnswer(option)}
-                    disabled={playerAnswered || !!correctAnswer}
-                    style={{
-                      backgroundColor,
-                      borderRadius: Radius.xl,
-                      minHeight: 58,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      paddingHorizontal: 12,
-                      opacity: playerAnswered || !!correctAnswer ? 0.85 : 1,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: Colors.textOnNavy,
-                        fontSize: 17,
-                        fontWeight: "700",
-                        textAlign: "center",
-                      }}
-                    >
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {isYearInputQuestion ? (
+              <View
+                style={{
+                  backgroundColor: Colors.navy,
+                  borderRadius: Radius.xl,
+                  padding: 14,
+                  gap: 12,
+                }}
+              >
+                <TextInput
+                  value={yearInput}
+                  onChangeText={(value) => setYearInput(value.replace(/[^\d]/g, ""))}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  editable={!isAnswerLocked}
+                  placeholder="Jahr eingeben"
+                  placeholderTextColor="rgba(255,255,255,0.65)"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.14)",
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    color: Colors.textOnNavy,
+                    fontSize: 20,
+                    fontWeight: "700",
+                    textAlign: "center",
+                  }}
+                />
+                <BBButton
+                  title={playerAnswered ? "Antwort gesendet" : "Antwort senden"}
+                  onPress={() => onAnswer(yearInput.trim())}
+                  disabled={!canSubmitYearInput}
+                />
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {optionRows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={{ flexDirection: "row", gap: 12 }}>
+                    {row.map((option) => {
+                      const disabled = playerAnswered || Boolean(correctAnswer);
+                      const isReveal = Boolean(correctAnswer);
+                      const optionBackgroundColor = !isReveal
+                        ? Colors.navy
+                        : option === correctAnswer
+                          ? "#16a34a"
+                          : "#dc2626";
+                      return (
+                        <Pressable
+                          key={option}
+                          onPress={() => onAnswer(option)}
+                          disabled={disabled}
+                          style={{
+                            flex: 1,
+                            minHeight: 82,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: optionBackgroundColor,
+                            borderRadius: Radius.xl,
+                            paddingHorizontal: 10,
+                            opacity: isReveal ? 1 : disabled ? 0.86 : 1,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: isReveal ? Colors.white : Colors.textOnNavy,
+                              fontSize: 18,
+                              fontWeight: "700",
+                              textAlign: "center",
+                            }}
+                          >
+                            {option}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                    {row.length < 2 && <View style={{ flex: 1 }} />}
+                  </View>
+                ))}
+              </View>
+            )}
 
             {!correctAnswer && (
               <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
                 {allAnswered
-                  ? "All players answered. Waiting for reveal..."
+                  ? "Alle haben geantwortet. Reveal kommt automatisch."
                   : timeUp
-                    ? "Time is up. Waiting for reveal..."
+                    ? "Zeit ist um. Reveal kommt automatisch."
                     : playerAnswered
-                      ? "Answer sent. Waiting for other players..."
-                      : "Choose your answer."}
+                      ? "Antwort gesendet. Warten auf andere Spieler..."
+                      : "Tippe auf eine Antwort."}
               </Text>
             )}
 
             {!!correctAnswer && (
               <>
-                <View
-                  style={{
-                    backgroundColor: Colors.navy,
-                    borderRadius: Radius.xl,
-                    paddingVertical: 18,
-                    paddingHorizontal: 14,
-                    alignItems: "center",
-                  }}
-                >
-                  {!!question.trackInfo.coverUrl && (
-                    <Image
-                      source={{ uri: question.trackInfo.coverUrl }}
-                      style={{ width: 96, height: 96, borderRadius: 12 }}
-                    />
-                  )}
-                  <Text
-                    style={{
-                      marginTop: 10,
-                      color: Colors.textOnNavy,
-                      fontSize: 18,
-                      fontWeight: "700",
-                      textAlign: "center",
-                    }}
-                  >
-                    {question.trackInfo.name}
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 4,
-                      color: Colors.textOnNavy,
-                      fontSize: 16,
-                      textAlign: "center",
-                    }}
-                  >
-                    {question.trackInfo.artist}
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 4,
-                      color: Colors.textOnNavy,
-                      fontSize: 16,
-                      textAlign: "center",
-                    }}
-                  >
-                    {question.trackInfo.album} | {question.trackInfo.year}
-                  </Text>
-                </View>
-
                 <BBButton
-                  title={playerContinued ? "Waiting for others..." : "Weiter"}
+                  title={playerContinued ? "Warten auf andere..." : "Weiter"}
                   onPress={onContinue}
                   disabled={playerContinued}
                 />
@@ -198,39 +225,12 @@ export function MultiplayerQuizView({
                   <Text
                     style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}
                   >
-                    All players continued. Waiting for next round...
+                    Alle bereit. Nächste Frage startet automatisch...
                   </Text>
                 )}
               </>
             )}
           </>
-        )}
-
-        {!!lobby && lobby.players.length > 0 && (
-          <View
-            style={{
-              marginTop: "auto",
-              backgroundColor: "rgba(255,255,255,0.55)",
-              borderRadius: 14,
-              paddingVertical: 10,
-              paddingHorizontal: 10,
-              gap: 6,
-            }}
-          >
-            {lobby.players.map((player) => (
-              <View
-                key={player.id}
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: Colors.textOnBg, fontWeight: "700" }}>{player.name}</Text>
-                <Text style={{ color: Colors.textOnBg, fontWeight: "700" }}>{player.score}</Text>
-              </View>
-            ))}
-          </View>
         )}
       </View>
     </View>

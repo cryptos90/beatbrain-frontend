@@ -1,160 +1,289 @@
-import Slider from "@react-native-community/slider";
-import React from "react";
-import { FlatList, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { AppHeader } from "../../components/AppHeader";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type LayoutChangeEvent,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { BBButton } from "../../components/BBButton";
-import { CARD_W, SCREEN_W } from "../../constants/app";
+import { CARD_W } from "../../constants/app";
 import { Colors, Radius } from "../../theme";
 import type { PlaylistCard } from "../../shared/types/app";
+import { HostLayout } from "../components/HostLayout";
 
 type Props = {
   playlists: PlaylistCard[];
   selectedPlaylistIndex: number;
-  questionCount: number;
-  playlistIdInput: string;
   setupError: string | null;
   creatingSession: boolean;
-  onBack: () => void;
-  onQuestionCountChange: (value: number) => void;
   onSelectPlaylistIndex: (index: number) => void;
-  onPlaylistIdInputChange: (value: string) => void;
   onCreateSession: () => void;
+  notice?: string | null;
 };
-
-function normalizeQuestionCount(value: number) {
-  const clamped = Math.max(10, Math.min(100, value));
-  return Math.max(10, Math.min(100, Math.round(clamped / 10) * 10));
-}
 
 export function HostQuizSetupScreen({
   playlists,
   selectedPlaylistIndex,
-  questionCount,
-  playlistIdInput,
   setupError,
   creatingSession,
-  onBack,
-  onQuestionCountChange,
   onSelectPlaylistIndex,
-  onPlaylistIdInputChange,
   onCreateSession,
+  notice,
 }: Props) {
-  return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <AppHeader onBack={onBack} />
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [carouselWidth, setCarouselWidth] = useState(Math.max(680, CARD_W * 2.8));
+  const itemSpacing = 14;
+  const cardWidth = useMemo(() => {
+    const visibleWithHalfSides = (carouselWidth - itemSpacing * 4) / 4;
+    return Math.max(124, Math.min(280, visibleWithHalfSides));
+  }, [carouselWidth]);
+  const itemWidth = cardWidth + itemSpacing;
+  const sideInset = Math.max(0, (carouselWidth - cardWidth) / 2);
+  const hasPlaylists = playlists.length > 0;
+  const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
 
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 6, gap: 14 }}>
-        <View
-          style={{
-            backgroundColor: Colors.white,
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-          }}
-        >
-          <Text
+  const onCarouselLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextWidth = Math.max(320, event.nativeEvent.layout.width);
+      if (Math.abs(nextWidth - carouselWidth) > 2) {
+        setCarouselWidth(nextWidth);
+      }
+    },
+    [carouselWidth],
+  );
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      if (!playlists.length) {
+        return;
+      }
+      const safeIndex = Math.max(0, Math.min(index, playlists.length - 1));
+      onSelectPlaylistIndex(safeIndex);
+      scrollRef.current?.scrollTo({
+        x: Math.max(0, safeIndex * itemWidth),
+        animated: true,
+      });
+    },
+    [itemWidth, onSelectPlaylistIndex, playlists.length],
+  );
+
+  const selectPrev = useCallback(() => {
+    selectIndex(selectedPlaylistIndex - 1);
+  }, [selectIndex, selectedPlaylistIndex]);
+
+  const selectNext = useCallback(() => {
+    selectIndex(selectedPlaylistIndex + 1);
+  }, [selectIndex, selectedPlaylistIndex]);
+
+  useEffect(() => {
+    if (!hasPlaylists) {
+      return;
+    }
+    scrollRef.current?.scrollTo({
+      x: Math.max(0, selectedPlaylistIndex * itemWidth),
+      animated: false,
+    });
+  }, [hasPlaylists, itemWidth, selectedPlaylistIndex]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        selectPrev();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        selectNext();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectNext, selectPrev]);
+
+  return (
+    <HostLayout maxWidth={1100} notice={notice}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          gap: 16,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <ArrowButton direction="left" disabled={selectedPlaylistIndex <= 0} onPress={selectPrev} />
+          <View style={{ flex: 1 }} onLayout={onCarouselLayout}>
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={itemWidth}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onMomentumScrollEnd={(event) => {
+                if (!playlists.length) {
+                  return;
+                }
+                const offset = event.nativeEvent.contentOffset.x;
+                const index = Math.round(offset / itemWidth);
+                const clamped = Math.max(0, Math.min(index, playlists.length - 1));
+                if (clamped !== selectedPlaylistIndex) {
+                  onSelectPlaylistIndex(clamped);
+                }
+              }}
+              contentContainerStyle={{
+                gap: itemSpacing,
+                paddingHorizontal: sideInset,
+                paddingVertical: 14,
+              }}
+              style={{ flex: 1 }}
+            >
+              {playlists.map((item, index) => {
+                const selected = selectedPlaylistIndex === index;
+                const distance = Math.abs(index - selectedPlaylistIndex);
+                const scale = selected ? 1.09 : distance <= 1 ? 0.96 : 0.88;
+                const opacity = selected ? 1 : distance <= 1 ? 0.84 : 0.62;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.92}
+                    onPress={() => selectIndex(index)}
+                    style={{
+                      width: cardWidth,
+                      alignItems: "center",
+                      opacity,
+                      transform: [{ scale }],
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: Colors.navy,
+                        borderRadius: Radius.xl,
+                        padding: 9,
+                        borderWidth: selected ? 4 : 1,
+                        borderColor: selected
+                          ? Colors.textOnNavy
+                          : "rgba(255,255,255,0.28)",
+                        width: "100%",
+                        shadowColor: "#000",
+                        shadowOpacity: selected ? 0.2 : 0.08,
+                        shadowRadius: selected ? 12 : 6,
+                        shadowOffset: { width: 0, height: selected ? 8 : 4 },
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={{ width: "100%", height: cardWidth - 18, borderRadius: Radius.lg }}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <ArrowButton
+            direction="right"
+            disabled={selectedPlaylistIndex >= playlists.length - 1}
+            onPress={selectNext}
+          />
+        </View>
+
+        {selectedPlaylist ? (
+          <View
             style={{
-              color: Colors.textOnBg,
-              fontWeight: "800",
-              fontSize: 18,
-              textAlign: "center",
+              alignSelf: "center",
+              maxWidth: 660,
+              width: "100%",
+              backgroundColor: Colors.navy,
+              borderRadius: Radius.lg,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
             }}
           >
-            Fragen: {questionCount}
+            <Text
+              numberOfLines={2}
+              style={{
+                color: Colors.textOnNavy,
+                fontSize: 20,
+                fontWeight: "800",
+                textAlign: "center",
+              }}
+            >
+              {selectedPlaylist.title}
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
+            Keine Playlists verfügbar.
           </Text>
-          <Slider
-            minimumValue={10}
-            maximumValue={100}
-            step={10}
-            value={questionCount}
-            minimumTrackTintColor={Colors.navy}
-            maximumTrackTintColor="rgba(15,23,42,0.2)"
-            thumbTintColor={Colors.navy}
-            onValueChange={(value) => onQuestionCountChange(normalizeQuestionCount(value))}
-            onSlidingComplete={(value) =>
-              onQuestionCountChange(normalizeQuestionCount(value))
-            }
-          />
-        </View>
-
-        <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "800" }}>
-          Choose Quiz (curated)
-        </Text>
-
-        <FlatList
-          data={playlists}
-          horizontal
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: (SCREEN_W - CARD_W) / 2 }}
-          renderItem={({ item, index }) => {
-            const selected = selectedPlaylistIndex === index;
-            return (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => onSelectPlaylistIndex(index)}
-                style={{ width: CARD_W, marginRight: 16, alignItems: "center" }}
-              >
-                <View
-                  style={{
-                    backgroundColor: Colors.navy,
-                    borderRadius: Radius.xl,
-                    padding: 12,
-                    borderWidth: selected ? 2 : 0,
-                    borderColor: Colors.textOnNavy,
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.imageUrl }}
-                    style={{ width: CARD_W - 24, height: CARD_W - 24, borderRadius: Radius.lg }}
-                  />
-                </View>
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    marginTop: 8,
-                    color: Colors.textOnBg,
-                    fontSize: 20,
-                    fontWeight: "700",
-                    textAlign: "center",
-                  }}
-                >
-                  {item.title}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-
-        <View
-          style={{
-            backgroundColor: Colors.white,
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-          }}
-        >
-          <TextInput
-            value={playlistIdInput}
-            onChangeText={onPlaylistIdInputChange}
-            autoCapitalize="none"
-            placeholder="Playlist ID (optional, ueberschreibt curated)"
-            style={{ fontSize: 15 }}
-          />
-        </View>
+        )}
 
         {!!setupError && (
-          <Text style={{ color: "red", textAlign: "center", fontWeight: "700" }}>
+          <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
             {setupError}
           </Text>
         )}
 
-        <BBButton
-          title={creatingSession ? "Bitte warten..." : "Quiz Session erstellen"}
-          onPress={onCreateSession}
-          disabled={creatingSession}
-        />
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 340,
+            alignSelf: "center",
+            marginTop: 4,
+          }}
+        >
+          <BBButton
+            title={creatingSession ? "Bitte warten..." : "Quiz starten"}
+            onPress={onCreateSession}
+            disabled={creatingSession}
+          />
+        </View>
       </View>
-    </View>
+    </HostLayout>
+  );
+}
+
+type ArrowButtonProps = {
+  direction: "left" | "right";
+  disabled: boolean;
+  onPress: () => void;
+};
+
+function ArrowButton({ direction, disabled, onPress }: ArrowButtonProps) {
+  const isLeft = direction === "left";
+  const chevronRotation = isLeft ? "225deg" : "45deg";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isLeft ? "Vorherige Playlist" : "Nächste Playlist"}
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => ({
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: Colors.navy,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.3 : pressed ? 0.82 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: 12,
+          height: 12,
+          borderTopWidth: 3,
+          borderRightWidth: 3,
+          borderColor: Colors.textOnNavy,
+          transform: [{ rotate: chevronRotation }],
+        }}
+      />
+    </Pressable>
   );
 }

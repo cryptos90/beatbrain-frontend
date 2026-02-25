@@ -1,18 +1,17 @@
 import React from "react";
 import { Image, Text, View, useWindowDimensions } from "react-native";
-import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
 import { Colors } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { HostLayout } from "../components/HostLayout";
 
 type Props = {
   lobby: LobbyState | null;
   joinUrl: string;
-  creatingLobby: boolean;
   socketError: string | null;
   canOpenSetup: boolean;
-  onCreateLobby: () => void;
   onOpenSetup: () => void;
+  notice?: string | null;
 };
 
 function playerStatusLabel(status: LobbyState["status"], answered: boolean, continued: boolean) {
@@ -28,96 +27,86 @@ function playerStatusLabel(status: LobbyState["status"], answered: boolean, cont
 export function HostLobbyScreen({
   lobby,
   joinUrl,
-  creatingLobby,
   socketError,
   canOpenSetup,
-  onCreateLobby,
   onOpenSetup,
+  notice,
 }: Props) {
   const { width } = useWindowDimensions();
   const gridColumns = width >= 1600 ? 5 : width >= 1300 ? 4 : width >= 980 ? 3 : 2;
+  const hasPlayers = Boolean(lobby?.players.length);
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <AppHeader onBack={() => {}} />
-
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8, gap: 14 }}>
-        {!lobby ? (
-          <>
-            <Text
-              style={{
-                color: Colors.textOnBg,
-                fontSize: 24,
-                fontWeight: "800",
-                textAlign: "center",
-              }}
-            >
-              Host Lobby starten
-            </Text>
-            <BBButton
-              title={creatingLobby ? "Bitte warten..." : "Session starten"}
-              onPress={onCreateLobby}
-              disabled={creatingLobby}
-            />
-          </>
-        ) : (
-          <>
-            <Text
-              style={{
-                color: Colors.textOnBg,
-                fontSize: 34,
-                fontWeight: "900",
-                textAlign: "center",
-                letterSpacing: 2,
-              }}
-            >
-              {lobby.joinCode}
-            </Text>
-
-            {!!joinUrl && (
+    <HostLayout notice={notice}>
+      <View style={{ flex: 1, gap: 14 }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            gap: 14,
+          }}
+        >
+          {!lobby ? (
+            <View style={{ alignItems: "center", justifyContent: "center", flex: 1 }}>
+              <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
+                Session wird vorbereitet...
+              </Text>
+            </View>
+          ) : (
+            <>
               <View
                 style={{
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: "rgba(255,255,255,0.45)",
                   borderRadius: 16,
-                  paddingVertical: 12,
+                  paddingVertical: 30,
                   gap: 8,
                 }}
               >
-                <Image
-                  source={{
-                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(joinUrl)}`,
+                <Text
+                  style={{
+                    color: Colors.textOnBg,
+                    fontSize: 34,
+                    fontWeight: "900",
+                    textAlign: "center",
+                    letterSpacing: 2,
                   }}
-                  style={{ width: 160, height: 160, borderRadius: 12 }}
-                />
-                <Text style={{ color: Colors.textOnBg, fontSize: 13, fontWeight: "700" }}>
-                  {joinUrl}
+                >
+                  {lobby.joinCode}
                 </Text>
+                {!!joinUrl && (
+                  <>
+                    <Image
+                      source={{
+                        uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(joinUrl)}`,
+                      }}
+                      style={{ width: 160, height: 160, borderRadius: 12 }}
+                    />
+                  </>
+                )}
               </View>
-            )}
 
-            <BBButton
-              title="Spiel starten"
-              onPress={onOpenSetup}
-              disabled={!canOpenSetup}
-            />
-            {!canOpenSetup && (
-              <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
-                Mindestens ein Player muss joinen.
-              </Text>
-            )}
-          </>
-        )}
+              <View style={{ width: "100%", maxWidth: 360, alignSelf: "center" }}>
+                <BBButton title="Spiel starten" onPress={onOpenSetup} disabled={!canOpenSetup} />
+              </View>
+              {!canOpenSetup && (
+                <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
+                  Mindestens ein Player muss joinen.
+                </Text>
+              )}
+            </>
+          )}
 
-        {!!socketError && (
-          <Text style={{ color: "red", textAlign: "center", fontWeight: "700" }}>
-            {socketError}
-          </Text>
-        )}
+          {!!socketError && (
+            <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
+              {socketError}
+            </Text>
+          )}
+        </View>
 
-        {!!lobby && lobby.players.length > 0 && (
-          <View style={{ marginTop: "auto", marginBottom: 10 }}>
+        {!!lobby && hasPlayers && (
+          <View style={{ marginBottom: 10 }}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
               {lobby.players.map((player) => (
                 <View
@@ -131,7 +120,7 @@ export function HostLobbyScreen({
                   <View
                     style={{
                       borderRadius: 16,
-                      backgroundColor: Colors.white,
+                      backgroundColor: Colors.navy,
                       paddingVertical: 14,
                       paddingHorizontal: 12,
                       alignItems: "center",
@@ -146,7 +135,7 @@ export function HostLobbyScreen({
                       numberOfLines={1}
                       style={{
                         marginTop: 10,
-                        color: Colors.textOnBg,
+                        color: Colors.textOnNavy,
                         fontSize: 20,
                         fontWeight: "800",
                         textAlign: "center",
@@ -154,10 +143,10 @@ export function HostLobbyScreen({
                     >
                       {player.name}
                     </Text>
-                    <Text style={{ color: Colors.textOnBg, fontSize: 17, fontWeight: "700" }}>
+                    <Text style={{ color: Colors.textOnNavy, fontSize: 17, fontWeight: "700" }}>
                       Score: {player.score}
                     </Text>
-                    <Text style={{ marginTop: 6, color: Colors.textOnBg, fontWeight: "700" }}>
+                    <Text style={{ marginTop: 6, color: Colors.textOnNavy, fontWeight: "700" }}>
                       {playerStatusLabel(lobby.status, player.answered, player.readyForNext)}
                     </Text>
                   </View>
@@ -167,6 +156,6 @@ export function HostLobbyScreen({
           </View>
         )}
       </View>
-    </View>
+    </HostLayout>
   );
 }
