@@ -1,4 +1,4 @@
-import type { ApiClientContext } from "../../shared/net/apiClient";
+﻿import type { ApiClientContext } from "../../shared/net/apiClient";
 import { ApiHttpError } from "../../shared/net/apiClient";
 import {
   getSpotifyPlayerDevices,
@@ -13,7 +13,7 @@ type PlaybackResult =
   | { ok: false; message: string; canOpenSpotify: boolean };
 
 const NO_ACTIVE_DEVICE_HINT =
-  "Spotify ist nicht als Wiedergabegerät aktiv. Öffne Spotify einmal kurz, starte einen Song (1 Sekunde reicht), geh zurück zu BeatBrain und drücke erneut auf Play.";
+  "Spotify ist auf diesem Geraet nicht als Wiedergabeziel aktiv. Oeffne Spotify auf diesem Geraet kurz, starte einen Song und versuche es erneut.";
 const LAST_SPOTIFY_DEVICE_ID_STORAGE_KEY = "beatbrain_last_spotify_device_id";
 const NO_ACTIVE_GRACE_DELAY_MS = 1200;
 
@@ -184,26 +184,49 @@ function pickBestDevice(devices: SpotifyPlayerDevice[]) {
     return null;
   }
 
-  const smartphone = normalized.find(
-    (device) => String(device.type ?? "").toLowerCase() === "smartphone",
-  );
+  const toType = (device: SpotifyPlayerDevice) =>
+    String(device.type ?? "").trim().toLowerCase();
+  const isComputer = (device: SpotifyPlayerDevice) => toType(device) === "computer";
+  const isSmartphone = (device: SpotifyPlayerDevice) => toType(device) === "smartphone";
+
+  if (Platform.OS === "web") {
+    const active = normalized.find((device) => Boolean(device.is_active));
+    if (active) {
+      return active;
+    }
+    return normalized[0] ?? null;
+  }
+
+  // Native: prefer explicit phone targets and avoid silent desktop fallback.
+  const smartphone = normalized.find((device) => isSmartphone(device));
   if (smartphone) {
     return smartphone;
   }
 
-  const iphoneName = normalized.find((device) =>
-    String(device.name ?? "").toLowerCase().includes("iphone"),
+  const activeNonComputer = normalized.find(
+    (device) => Boolean(device.is_active) && !isComputer(device),
   );
-  if (iphoneName) {
-    return iphoneName;
+  if (activeNonComputer) {
+    return activeNonComputer;
   }
 
-  const active = normalized.find((device) => Boolean(device.is_active));
-  if (active) {
-    return active;
+  const nameBasedPhone = normalized.find((device) => {
+    if (isComputer(device)) {
+      return false;
+    }
+    const normalizedName = String(device.name ?? "").toLowerCase();
+    return (
+      normalizedName.includes("iphone") ||
+      normalizedName.includes("android") ||
+      normalizedName.includes("pixel") ||
+      normalizedName.includes("galaxy")
+    );
+  });
+  if (nameBasedPhone) {
+    return nameBasedPhone;
   }
 
-  return normalized[0] ?? null;
+  return null;
 }
 
 export function clearCachedSpotifyPlaybackDevice() {
@@ -309,6 +332,37 @@ export async function playTrackWithMinimalSpotifyRequests(
 
   await hydrateCachedDeviceId();
 
+  // On native we must resolve and pin a concrete target device before first play
+  // to avoid backend fallback selecting a stale desktop device from another session.
+  if (!cachedDeviceId) {
+    try {
+      const devices = await getSpotifyPlayerDevices(context);
+      const selectedDevice = pickBestDevice(devices);
+      if (selectedDevice?.id) {
+        await cacheSelectedDevice(selectedDevice.id);
+        debugLog(
+          `[spotify-playback] Preselected device: ${selectedDevice.name || "<unknown>"} (${selectedDevice.type || "<unknown>"})`,
+        );
+      } else if (Platform.OS !== "web") {
+        clearCachedSpotifyPlaybackDevice();
+        cacheHydrated = true;
+        return {
+          ok: false,
+          message: NO_ACTIVE_DEVICE_HINT,
+          canOpenSpotify: true,
+        };
+      }
+    } catch (devicesError) {
+      if (Platform.OS !== "web") {
+        return {
+          ok: false,
+          message: toPlaybackErrorMessage(devicesError),
+          canOpenSpotify: true,
+        };
+      }
+    }
+  }
+
   try {
     debugLog(
       `[spotify-playback] PLAY attempt #1 (deviceId=${cachedDeviceId ?? "<none>"})`,
@@ -349,6 +403,16 @@ export async function playTrackWithMinimalSpotifyRequests(
 
   const selectedDevice = pickBestDevice(devices);
   if (!selectedDevice?.id) {
+    if (Platform.OS !== "web") {
+      clearCachedSpotifyPlaybackDevice();
+      cacheHydrated = true;
+      return {
+        ok: false,
+        message: NO_ACTIVE_DEVICE_HINT,
+        canOpenSpotify: true,
+      };
+    }
+
     const graceRetryResult = await tryOneTimeNoActiveGraceRetry(
       context,
       normalizedTrackUri,
@@ -406,3 +470,4 @@ export async function playTrackWithMinimalSpotifyRequests(
     };
   }
 }
+
