@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
-import { API_BASE_URL } from "../../shared/config";
+import {
+  API_BASE_URL,
+  isLoopbackApiBaseUrl,
+  isLoopbackHostname,
+  normalizeApiBaseUrl,
+} from "../../shared/config";
 import { ApiHttpError, type ApiClientContext } from "../../shared/net/apiClient";
 import {
   consumeAuthResult,
@@ -348,10 +353,34 @@ export function useHostController() {
   const totalPlayers = lobby?.players.length ?? 0;
   const readyCount = lobby?.players.filter((player) => player.readyForNext).length ?? 0;
 
-  const joinUrl =
-    Platform.OS === "web" && lobby?.joinCode
-      ? `${window.location.origin}/?joinCode=${encodeURIComponent(lobby.joinCode)}`
-      : "";
+  const joinUrl = useMemo(() => {
+    if (Platform.OS !== "web" || !lobby?.joinCode) {
+      return "";
+    }
+
+    const joinTarget = new URL(window.location.origin);
+    joinTarget.searchParams.set("joinCode", lobby.joinCode);
+
+    const configuredBackendUrl = normalizeApiBaseUrl(API_BASE_URL);
+    if (configuredBackendUrl && !isLoopbackApiBaseUrl(configuredBackendUrl)) {
+      joinTarget.searchParams.set("backendUrl", configuredBackendUrl);
+      return joinTarget.toString();
+    }
+
+    try {
+      const pageOrigin = new URL(window.location.origin);
+      if (!isLoopbackHostname(pageOrigin.hostname)) {
+        const derivedBackendUrl = normalizeApiBaseUrl(`http://${pageOrigin.hostname}:3000`);
+        if (derivedBackendUrl) {
+          joinTarget.searchParams.set("backendUrl", derivedBackendUrl);
+        }
+      }
+    } catch {
+      // Ignore invalid web origin parsing and keep join link usable with code only.
+    }
+
+    return joinTarget.toString();
+  }, [lobby?.joinCode]);
 
   useEffect(() => {
     lobbyJoinCodeRef.current = lobby?.joinCode ?? null;
@@ -596,7 +625,7 @@ export function useHostController() {
     }
 
     const socket = io(API_BASE_URL, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
     });
 
     socket.on("host:lobbyCreated", (state: LobbyState) => {

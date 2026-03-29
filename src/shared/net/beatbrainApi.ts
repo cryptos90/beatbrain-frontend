@@ -10,12 +10,18 @@ export type SpotifyPlayerDevice = {
   is_active: boolean;
 };
 
+type AuthRequestOptions = {
+  redirectOrigin?: string;
+  baseUrl?: string;
+};
+
 export async function startSpotifyAuth(
   clientType: "mobile" | "web",
-  options?: { redirectOrigin?: string },
+  options?: AuthRequestOptions,
 ) {
+  const baseUrl = options?.baseUrl ?? API_BASE_URL;
   const response = await fetch(
-    `${API_BASE_URL}/auth/spotify/start?client=${encodeURIComponent(clientType)}`,
+    `${baseUrl}/auth/spotify/start?client=${encodeURIComponent(clientType)}`,
     {
       method: "POST",
       headers: {
@@ -33,8 +39,13 @@ export async function startSpotifyAuth(
   return (await response.json()) as JsonRecord;
 }
 
-export async function completeSpotifyCallback(code: string, state: string) {
-  const response = await fetch(`${API_BASE_URL}/auth/spotify/exchange`, {
+export async function completeSpotifyCallback(
+  code: string,
+  state: string,
+  options?: { baseUrl?: string },
+) {
+  const baseUrl = options?.baseUrl ?? API_BASE_URL;
+  const response = await fetch(`${baseUrl}/auth/spotify/exchange`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -47,10 +58,9 @@ export async function completeSpotifyCallback(code: string, state: string) {
   return (await response.json()) as JsonRecord;
 }
 
-export async function consumeAuthResult(authCode: string) {
-  const response = await fetch(
-    `${API_BASE_URL}/auth/result?code=${encodeURIComponent(authCode)}`,
-  );
+export async function consumeAuthResult(authCode: string, options?: { baseUrl?: string }) {
+  const baseUrl = options?.baseUrl ?? API_BASE_URL;
+  const response = await fetch(`${baseUrl}/auth/result?code=${encodeURIComponent(authCode)}`);
   if (!response.ok) {
     throw new Error(await response.text());
   }

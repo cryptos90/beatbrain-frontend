@@ -7,28 +7,93 @@ type Props = {
   children: ReactNode;
   maxWidth?: number;
   notice?: string | null;
+  headerEyebrow?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  compactHeader?: boolean;
 };
 
-export function HostLayout({ children, maxWidth = 980, notice }: Props) {
+export function HostLayout({
+  children,
+  maxWidth = 980,
+  notice,
+  headerEyebrow,
+  headerTitle,
+  headerSubtitle,
+  compactHeader = false,
+}: Props) {
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <HostHeader />
+    <View style={{ flex: 1, backgroundColor: Colors.bg, overflow: "hidden" }}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -120,
+          right: -60,
+          width: 340,
+          height: 340,
+          borderRadius: 170,
+          backgroundColor: "rgba(32,44,89,0.14)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: -140,
+          left: -90,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor: "rgba(255,255,255,0.2)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: "32%",
+          left: "9%",
+          width: 140,
+          height: 140,
+          borderRadius: 70,
+          backgroundColor: "rgba(255,255,255,0.12)",
+        }}
+      />
+
+      <HostHeader
+        eyebrow={headerEyebrow}
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        compact={compactHeader}
+      />
       {!!notice && (
-        <Text
+        <View
           style={{
-            color: Colors.textOnBg,
-            textAlign: "center",
-            fontSize: 13,
-            fontWeight: "600",
-            opacity: 0.9,
-            paddingHorizontal: 24,
-            marginBottom: 8,
+            alignSelf: "center",
+            maxWidth: Math.min(maxWidth, 860),
+            marginBottom: 10,
+            marginHorizontal: 24,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 999,
+            backgroundColor: "rgba(255,255,255,0.68)",
           }}
         >
-          {notice}
-        </Text>
+          <Text
+            style={{
+              color: Colors.textOnBg,
+              textAlign: "center",
+              fontSize: 14,
+              fontWeight: "700",
+              opacity: 0.92,
+            }}
+          >
+            {notice}
+          </Text>
+        </View>
       )}
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingBottom: 20 }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 22 }}>
         <View style={{ flex: 1, width: "100%", maxWidth, alignSelf: "center" }}>{children}</View>
       </View>
     </View>

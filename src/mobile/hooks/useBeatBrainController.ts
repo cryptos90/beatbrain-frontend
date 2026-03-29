@@ -11,6 +11,8 @@ import {
   SPOTIFY_REDIRECT_URI,
   SPOTIFY_REDIRECT_URI_WEB,
   SPOTIFY_REDIRECT_URI_WEB_FALLBACK,
+  deriveApiBaseUrlFromJoinUrl,
+  normalizeApiBaseUrl,
 } from "../../shared/config";
 import { ApiHttpError, type ApiClientContext } from "../../shared/net/apiClient";
 import {
@@ -176,7 +178,16 @@ function toShortUiMessage(raw: string | null | undefined, fallback: string) {
   return normalized.slice(0, 180);
 }
 
+function toMultiplayerConnectionMessage(baseUrl: string, error?: unknown) {
+  const cause =
+    error instanceof Error && error.message ? ` (${toShortUiMessage(error.message, "")})` : "";
+  return `Backend unter ${baseUrl} ist vom Handy nicht erreichbar.${cause}`;
+}
+
 type ChooseViewMode = "normal" | "error";
+type ChooseLoadResult =
+  | { ok: true; cards: PlaylistCard[] }
+  | { ok: false; error: unknown };
 
 type LastQuizConfig = {
   playlistId: string;
@@ -245,6 +256,7 @@ export function useBeatBrainController() {
   const [mpCorrectAnswer, setMpCorrectAnswer] = useState<string | null>(null);
   const [mpJoinCodeInput, setMpJoinCodeInput] = useState("");
   const [mpJoinError, setMpJoinError] = useState<string | null>(null);
+  const [mpApiBaseUrlOverride, setMpApiBaseUrlOverride] = useState<string | null>(null);
   const [mpPlayerName, setMpPlayerName] = useState("Player");
   const [mpPlayerAvatarDataUrl, setMpPlayerAvatarDataUrl] = useState("");
   const [mpPlayerAnswered, setMpPlayerAnswered] = useState(false);
@@ -256,9 +268,13 @@ export function useBeatBrainController() {
   const playerSessionIdRef = useRef<string | null>(null);
   const shouldAutoResumePlayerRef = useRef(false);
   const playlistsLoadedForJwtRef = useRef<string | null>(null);
-  const playlistsLoadInFlightRef = useRef<Promise<void> | null>(null);
+  const playlistsLoadInFlightRef = useRef<Promise<ChooseLoadResult> | null>(null);
+  const socketBaseUrlRef = useRef<string | null>(null);
+  const pendingPlayerJoinRef = useRef<{ joinCode: string; baseUrl: string } | null>(null);
+  const pendingPlayerJoinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasAuth = Boolean(hostJwt);
+  const effectiveApiBaseUrl = mpApiBaseUrlOverride ?? API_BASE_URL;
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
@@ -268,10 +284,45 @@ export function useBeatBrainController() {
 
   const apiContext = useMemo<ApiClientContext>(
     () => ({
+      baseUrl: effectiveApiBaseUrl,
       getJwt: () => hostJwt,
       setJwt: (nextJwt) => setPersistedHostJwt(nextJwt),
     }),
-    [hostJwt],
+    [effectiveApiBaseUrl, hostJwt],
+  );
+
+  const applyDetectedMultiplayerApiBaseUrl = useCallback((rawUrl: string | null | undefined) => {
+    const normalized = normalizeApiBaseUrl(rawUrl);
+    if (!normalized) {
+      return;
+    }
+    setMpApiBaseUrlOverride(normalized);
+  }, []);
+
+  const clearPendingPlayerJoin = useCallback(() => {
+    pendingPlayerJoinRef.current = null;
+    if (pendingPlayerJoinTimeoutRef.current) {
+      clearTimeout(pendingPlayerJoinTimeoutRef.current);
+      pendingPlayerJoinTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startPendingPlayerJoin = useCallback(
+    (joinCode: string, baseUrl: string) => {
+      clearPendingPlayerJoin();
+      pendingPlayerJoinRef.current = { joinCode, baseUrl };
+      pendingPlayerJoinTimeoutRef.current = setTimeout(() => {
+        const pendingJoin = pendingPlayerJoinRef.current;
+        if (!pendingJoin || pendingJoin.joinCode !== joinCode) {
+          return;
+        }
+        clearPendingPlayerJoin();
+        setMpJoinError(
+          `Verbindung zur Session ${joinCode} fehlgeschlagen. ${toMultiplayerConnectionMessage(baseUrl)}`,
+        );
+      }, 4500);
+    },
+    [clearPendingPlayerJoin],
   );
 
   const clearChooseErrorState = () => {
@@ -281,6 +332,76 @@ export function useBeatBrainController() {
     setChooseRetryAfterSeconds(null);
     setChooseViewMode("normal");
   };
+
+  const beginChooseUiLoad = useCallback(() => {
+    setChooseLoading(true);
+    setChooseViewMode("normal");
+    setChooseRetryAfterSeconds(null);
+    setPlaylistError(null);
+    setReauthRequired(false);
+    setReauthMessage(null);
+  }, []);
+
+  const applyChooseLoadError = useCallback((error: unknown) => {
+    let message = "Playlists konnten nicht geladen werden.";
+    if (error instanceof ApiHttpError) {
+      if (error.status === 429) {
+        const seconds =
+          typeof error.retryAfterSeconds === "number" && Number.isFinite(error.retryAfterSeconds)
+            ? Math.max(1, Math.ceil(error.retryAfterSeconds))
+            : null;
+        setChooseRetryAfterSeconds(seconds);
+        setReauthRequired(false);
+        setReauthMessage(null);
+        message = seconds
+          ? `Spotify rate-limited. Try again in ${seconds}s.`
+          : "Spotify rate-limited. Try again soon.";
+      } else if (error.status === 401) {
+        setReauthRequired(false);
+        setReauthMessage(null);
+        message = "Session abgelaufen, bitte erneut einloggen";
+      } else if (error.status === 409) {
+        setReauthRequired(true);
+        setReauthMessage(
+          toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
+        );
+        message = toShortUiMessage(error.message, "Re-login erforderlich.");
+      } else if (error.message) {
+        setReauthRequired(false);
+        setReauthMessage(null);
+        message = toShortUiMessage(error.message, "Playlists konnten nicht geladen werden.");
+      }
+    } else {
+      setReauthRequired(false);
+      setReauthMessage(null);
+    }
+
+    setPlaylistError(message);
+    setChooseViewMode("error");
+  }, []);
+
+  const applyChooseLoadResult = useCallback(
+    (result: ChooseLoadResult) => {
+      if (!result.ok) {
+        applyChooseLoadError(result.error);
+        return;
+      }
+
+      setChooseRetryAfterSeconds(null);
+      setReauthRequired(false);
+      setReauthMessage(null);
+
+      if (!result.cards.length) {
+        setPlaylistError("Keine Playlists gefunden.");
+        setChooseViewMode("error");
+        return;
+      }
+
+      setPlaylistError(null);
+      setChooseViewMode("normal");
+    },
+    [applyChooseLoadError],
+  );
 
   const loadChoosePlaylists = useCallback(
     async (options?: { force?: boolean; withUiState?: boolean }) => {
@@ -299,21 +420,20 @@ export function useBeatBrainController() {
         return;
       }
 
+      if (withUiState) {
+        beginChooseUiLoad();
+      }
+
       if (playlistsLoadInFlightRef.current) {
-        await playlistsLoadInFlightRef.current;
+        const inFlightResult = await playlistsLoadInFlightRef.current;
+        if (withUiState) {
+          applyChooseLoadResult(inFlightResult);
+          setChooseLoading(false);
+        }
         return;
       }
 
-      const loadTask = (async () => {
-        if (withUiState) {
-          setChooseLoading(true);
-          setChooseViewMode("normal");
-          setChooseRetryAfterSeconds(null);
-          setPlaylistError(null);
-          setReauthRequired(false);
-          setReauthMessage(null);
-        }
-
+      const loadTask = (async (): Promise<ChooseLoadResult> => {
         try {
           const resolved = await getChoosePlaylists(apiContext);
           const cards = resolved.map((playlist) => ({
@@ -324,17 +444,7 @@ export function useBeatBrainController() {
           playlistsLoadedForJwtRef.current = jwtKey;
           setPlaylists(cards);
           setSelectedPlaylistIndex((index) => Math.max(0, Math.min(index, cards.length - 1)));
-
-          if (withUiState) {
-            if (!cards.length) {
-              setPlaylistError("Keine Playlists gefunden.");
-              setChooseViewMode("error");
-            } else {
-              setChooseViewMode("normal");
-            }
-            setReauthRequired(false);
-            setReauthMessage(null);
-          }
+          return { ok: true, cards };
         } catch (error) {
           if (__DEV__) {
             console.error("[choose] playlist resolve failed", error);
@@ -342,63 +452,26 @@ export function useBeatBrainController() {
 
           playlistsLoadedForJwtRef.current = null;
           setPlaylists([]);
-
-          if (!withUiState) {
-            return;
-          }
-
-          let message = "Playlists konnten nicht geladen werden.";
-          if (error instanceof ApiHttpError) {
-            if (error.status === 429) {
-              const seconds =
-                typeof error.retryAfterSeconds === "number" && Number.isFinite(error.retryAfterSeconds)
-                  ? Math.max(1, Math.ceil(error.retryAfterSeconds))
-                  : null;
-              setChooseRetryAfterSeconds(seconds);
-              setReauthRequired(false);
-              setReauthMessage(null);
-              message = seconds
-                ? `Spotify rate-limited. Try again in ${seconds}s.`
-                : "Spotify rate-limited. Try again soon.";
-            } else if (error.status === 401) {
-              setReauthRequired(false);
-              setReauthMessage(null);
-              message = "Session abgelaufen, bitte erneut einloggen";
-            } else if (error.status === 409) {
-              setReauthRequired(true);
-              setReauthMessage(
-                toShortUiMessage(toReauthMessage(error), "Spotify Login erneuern erforderlich."),
-              );
-              message = toShortUiMessage(error.message, "Re-login erforderlich.");
-            } else if (error.message) {
-              setReauthRequired(false);
-              setReauthMessage(null);
-              message = toShortUiMessage(error.message, "Playlists konnten nicht geladen werden.");
-            }
-          } else {
-            setReauthRequired(false);
-            setReauthMessage(null);
-          }
-
-          setPlaylistError(message);
-          setChooseViewMode("error");
-        } finally {
-          if (withUiState) {
-            setChooseLoading(false);
-          }
+          return { ok: false, error };
         }
       })();
 
       playlistsLoadInFlightRef.current = loadTask;
       try {
-        await loadTask;
+        const result = await loadTask;
+        if (withUiState) {
+          applyChooseLoadResult(result);
+        }
       } finally {
         if (playlistsLoadInFlightRef.current === loadTask) {
           playlistsLoadInFlightRef.current = null;
         }
+        if (withUiState) {
+          setChooseLoading(false);
+        }
       }
     },
-    [apiContext, hostJwt],
+    [apiContext, applyChooseLoadResult, beginChooseUiLoad, hostJwt],
   );
 
   const stopTimer = () => {
@@ -472,13 +545,16 @@ export function useBeatBrainController() {
   );
 
   const resetMultiplayerState = () => {
+    clearPendingPlayerJoin();
     activeMultiplayerIdentityRef.current = null;
     playerSessionIdRef.current = null;
     shouldAutoResumePlayerRef.current = false;
+    socketBaseUrlRef.current = null;
     setMpLobby(null);
     setMpQuestion(null);
     setMpCorrectAnswer(null);
     setMpJoinError(null);
+    setMpApiBaseUrlOverride(null);
     setMpPlayerAnswered(false);
     setMpPlayerContinued(false);
     setMpAllAnswered(false);
@@ -492,19 +568,28 @@ export function useBeatBrainController() {
   };
 
   const connectSocket = () => {
-    if (socketRef.current) {
+    if (socketRef.current && socketBaseUrlRef.current === effectiveApiBaseUrl) {
       return socketRef.current;
     }
 
-    const socket = io(API_BASE_URL, {
-      transports: ["websocket"],
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      socketBaseUrlRef.current = null;
+    }
+
+    const socket = io(effectiveApiBaseUrl, {
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 900,
       reconnectionDelayMax: 4_000,
+      timeout: 4_000,
     });
 
     socket.on("connect", () => {
+      setMpJoinError(null);
+
       if (!shouldAutoResumePlayerRef.current) {
         return;
       }
@@ -523,12 +608,14 @@ export function useBeatBrainController() {
       if (!normalizedPlayerSessionId) {
         return;
       }
+      clearPendingPlayerJoin();
       playerSessionIdRef.current = normalizedPlayerSessionId;
       shouldAutoResumePlayerRef.current = true;
       setMpJoinError(null);
     });
 
     socket.on("lobby:state", (state: LobbyState) => {
+      clearPendingPlayerJoin();
       setMpLobby(state);
       if (state.status === "results") {
         setScreen({ name: "multiplayerResults" });
@@ -609,10 +696,22 @@ export function useBeatBrainController() {
           : Array.isArray(payload?.message) && typeof payload.message[0] === "string"
             ? payload.message[0]
             : "Socket request failed.";
+      clearPendingPlayerJoin();
       setMpJoinError(message);
     });
 
+    socket.on("connect_error", (error: Error) => {
+      const pendingJoin = pendingPlayerJoinRef.current;
+      if (!pendingJoin) {
+        return;
+      }
+
+      clearPendingPlayerJoin();
+      setMpJoinError(toMultiplayerConnectionMessage(pendingJoin.baseUrl, error));
+    });
+
     socketRef.current = socket;
+    socketBaseUrlRef.current = effectiveApiBaseUrl;
     return socket;
   };
 
@@ -683,6 +782,7 @@ export function useBeatBrainController() {
     const joinCode = mpJoinCodeInput.trim().toUpperCase();
     const name = mpPlayerName.trim();
     const avatarDataUrl = mpPlayerAvatarDataUrl.trim();
+    const baseUrl = effectiveApiBaseUrl;
 
     if (!joinCode) {
       setMpJoinError("Session ID is required.");
@@ -708,7 +808,11 @@ export function useBeatBrainController() {
     };
     activeMultiplayerIdentityRef.current = identity;
     setMpJoinError(null);
+    startPendingPlayerJoin(joinCode, baseUrl);
     const socket = connectSocket();
+    if (socket.disconnected) {
+      socket.connect();
+    }
     emitPlayerJoin(socket, identity, playerSessionIdRef.current);
   };
 
@@ -791,6 +895,7 @@ export function useBeatBrainController() {
       const state = readState(url);
       const oauthError = readQueryParam(url, "error");
       const joinCode = readJoinCode(url);
+      const joinBackendUrl = deriveApiBaseUrlFromJoinUrl(url);
 
       if (oauthError) {
         setAuthError("Spotify login failed.");
@@ -801,6 +906,7 @@ export function useBeatBrainController() {
 
       if (joinCode && !state && !code) {
         resetMultiplayerState();
+        applyDetectedMultiplayerApiBaseUrl(joinBackendUrl);
         setMpJoinCodeInput(joinCode);
         setScreen({ name: "multiplayerJoin" });
         return;
@@ -808,7 +914,7 @@ export function useBeatBrainController() {
 
       if (authCode) {
         setAuthBusy(true);
-        const data = await consumeAuthResult(authCode);
+        const data = await consumeAuthResult(authCode, { baseUrl: effectiveApiBaseUrl });
         setPersistedHostJwt(data.appJwt ?? null);
         setPendingAuthState(null);
         setAuthError(null);
@@ -828,13 +934,15 @@ export function useBeatBrainController() {
       }
 
       setAuthBusy(true);
-      const exchange = await completeSpotifyCallback(code, state);
+      const exchange = await completeSpotifyCallback(code, state, {
+        baseUrl: effectiveApiBaseUrl,
+      });
       const exchangeCode = typeof exchange.authCode === "string" ? exchange.authCode : "";
       if (!exchangeCode) {
         throw new Error("Missing auth exchange code");
       }
 
-      const data = await consumeAuthResult(exchangeCode);
+      const data = await consumeAuthResult(exchangeCode, { baseUrl: effectiveApiBaseUrl });
       setPersistedHostJwt(data.appJwt ?? null);
       setPendingAuthState(null);
       setAuthError(null);
@@ -862,10 +970,11 @@ export function useBeatBrainController() {
     setAuthError(null);
 
     try {
-      const backendHealthy = await checkBackendHealth(API_BASE_URL);
+      const baseUrl = effectiveApiBaseUrl;
+      const backendHealthy = await checkBackendHealth(baseUrl);
       if (!backendHealthy) {
         setAuthError(
-          `Backend nicht erreichbar: ${API_BASE_URL}. Bitte start-backend.bat ausführen.`,
+          `Backend nicht erreichbar: ${baseUrl}. Bitte start-backend.bat ausführen.`,
         );
         setAuthBusy(false);
         setLoginPending(false);
@@ -873,16 +982,17 @@ export function useBeatBrainController() {
       }
 
       console.log("[auth] startSpotifyLogin begin");
-      console.log("[auth] API_BASE_URL", API_BASE_URL);
+      console.log("[auth] API_BASE_URL", baseUrl);
 
       const clientType = Platform.OS === "web" ? "web" : "mobile";
       const redirectUri = resolveSpotifyRedirectUri(Platform.OS);
-      const backendStartUrl = `${API_BASE_URL}/auth/spotify/start?client=${encodeURIComponent(clientType)}`;
+      const backendStartUrl = `${baseUrl}/auth/spotify/start?client=${encodeURIComponent(clientType)}`;
       console.log("[auth] calling backend start url=", backendStartUrl);
 
       let data;
       try {
         data = await startSpotifyAuth(clientType, {
+          baseUrl,
           redirectOrigin: Platform.OS === "web" ? window.location.origin : undefined,
         });
       } catch (error) {
@@ -936,6 +1046,7 @@ export function useBeatBrainController() {
         const exchange = await completeSpotifyCallback(
           code,
           returnedState ?? expectedState ?? "",
+          { baseUrl },
         );
         let appJwt: string | null = null;
         let resolvedViaConsume = false;
@@ -943,7 +1054,7 @@ export function useBeatBrainController() {
         if (typeof exchange.appJwt === "string" && exchange.appJwt.trim()) {
           appJwt = exchange.appJwt.trim();
         } else if (typeof exchange.authCode === "string" && exchange.authCode.trim()) {
-          const auth = await consumeAuthResult(exchange.authCode);
+          const auth = await consumeAuthResult(exchange.authCode, { baseUrl });
           if (typeof auth.appJwt === "string" && auth.appJwt.trim()) {
             appJwt = auth.appJwt.trim();
           }
@@ -1349,7 +1460,16 @@ export function useBeatBrainController() {
 
     void handleAuthRedirect(url).finally(() => {
       const parsed = new URL(window.location.href);
-      for (const key of ["auth_code", "code", "state", "error", "joinCode", "sessionId"]) {
+      for (const key of [
+        "auth_code",
+        "code",
+        "state",
+        "error",
+        "joinCode",
+        "sessionId",
+        "backendUrl",
+        "apiBaseUrl",
+      ]) {
         parsed.searchParams.delete(key);
       }
       const nextPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
@@ -1434,15 +1554,17 @@ export function useBeatBrainController() {
 
   useEffect(() => {
     return () => {
+      clearPendingPlayerJoin();
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      socketBaseUrlRef.current = null;
       resetSpotifyPlaybackWarmupState();
       clearCachedSpotifyPlaybackDevice();
       stopTimer();
     };
-  }, []);
+  }, [clearPendingPlayerJoin]);
 
   return {
     screen,
@@ -1502,6 +1624,7 @@ export function useBeatBrainController() {
     mpCorrectAnswer,
     mpJoinCodeInput,
     setMpJoinCodeInput,
+    setMultiplayerApiBaseUrl: applyDetectedMultiplayerApiBaseUrl,
     mpJoinError,
     mpPlayerName,
     setMpPlayerName,

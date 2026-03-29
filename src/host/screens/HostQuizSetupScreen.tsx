@@ -109,7 +109,7 @@ export function HostQuizSetupScreen({
   }, [selectNext, selectPrev]);
 
   return (
-    <HostLayout maxWidth={1100} notice={notice}>
+    <HostLayout maxWidth={1160} notice={notice} headerEyebrow="Playlist Auswahl">
       <View
         style={{
           flex: 1,
@@ -117,6 +117,41 @@ export function HostQuizSetupScreen({
           gap: 16,
         }}
       >
+        <View
+          style={{
+            alignSelf: "center",
+            maxWidth: 760,
+            width: "100%",
+            borderRadius: Radius.xl,
+            backgroundColor: "rgba(255,255,255,0.72)",
+            paddingHorizontal: 18,
+            paddingVertical: 16,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={{
+              color: Colors.textOnBg,
+              fontSize: 24,
+              fontWeight: "900",
+              textAlign: "center",
+            }}
+          >
+            Playlist wählen
+          </Text>
+          <Text
+            style={{
+              color: "rgba(32,44,89,0.84)",
+              fontSize: 15,
+              lineHeight: 22,
+              fontWeight: "600",
+              textAlign: "center",
+            }}
+          >
+            {selectedPlaylist ? selectedPlaylist.title : "Playlist auswählen"}
+          </Text>
+        </View>
+
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <ArrowButton direction="left" disabled={selectedPlaylistIndex <= 0} onPress={selectPrev} />
           <View style={{ flex: 1 }} onLayout={onCarouselLayout}>
@@ -202,17 +237,30 @@ export function HostQuizSetupScreen({
               maxWidth: 660,
               width: "100%",
               backgroundColor: Colors.navy,
-              borderRadius: Radius.lg,
-              paddingVertical: 10,
-              paddingHorizontal: 14,
+              borderRadius: Radius.xl,
+              paddingVertical: 16,
+              paddingHorizontal: 18,
+              gap: 8,
             }}
           >
+            <Text
+              style={{
+                color: "rgba(46,196,182,0.86)",
+                fontSize: 12,
+                fontWeight: "900",
+                textTransform: "uppercase",
+                letterSpacing: 1.1,
+                textAlign: "center",
+              }}
+            >
+              Aktive Auswahl
+            </Text>
             <Text
               numberOfLines={2}
               style={{
                 color: Colors.textOnNavy,
-                fontSize: 20,
-                fontWeight: "800",
+                fontSize: 26,
+                fontWeight: "900",
                 textAlign: "center",
               }}
             >
@@ -234,15 +282,17 @@ export function HostQuizSetupScreen({
         <View
           style={{
             width: "100%",
-            maxWidth: 340,
+            maxWidth: 420,
             alignSelf: "center",
             marginTop: 4,
           }}
         >
           <BBButton
-            title={creatingSession ? "Bitte warten..." : "Quiz starten"}
+            title={creatingSession ? "Quiz wird vorbereitet..." : "Diese Playlist starten"}
             onPress={onCreateSession}
             disabled={creatingSession}
+            style={{ height: 64 }}
+            textStyle={{ fontSize: 20, fontWeight: "800" }}
           />
         </View>
       </View>
