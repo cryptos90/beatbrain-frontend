@@ -217,17 +217,6 @@ export function HostLobbyScreen({
                 gap: 14,
               }}
             >
-              <Text
-                style={{
-                  color: Colors.textOnBg,
-                  fontSize: 28,
-                  fontWeight: "900",
-                  textAlign: "center",
-                }}
-              >
-                {hasPlayers ? `${lobby.players.length} Spieler` : "Noch keine Spieler"}
-              </Text>
-
               {hasPlayers ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
                   {lobby.players.map((player) => (
@@ -311,6 +300,7 @@ export function HostLobbyScreen({
                       fontWeight: "800",
                       fontSize: 17,
                       lineHeight: 24,
+                      
                     }}
                   >
                     Warte auf den ersten Spieler.
