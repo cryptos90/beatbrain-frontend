@@ -22,6 +22,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
 Notes:
 - Keep `.env` local only; do not commit it.
 - `.env.example` must stay secret-free.
+- `EXPO_PUBLIC_API_BASE_URL` is optional when you start via `start-frontend.bat`; the launcher auto-detects the current machine's LAN IP and uses `http://<detected-ip>:3000`.
 
 ## Run locally
 
@@ -38,11 +39,28 @@ start-frontend.bat web
 start-frontend.bat lan
 ```
 
+Optional backend override:
+
+```bat
+start-frontend.bat lan 192.168.2.50
+start-frontend.bat lan http://192.168.2.50:3000
+```
+
 Option 2 (manual):
 
 ```bash
 npm run start
 ```
+
+For Expo Web / host mode:
+
+```bash
+npm run start:web
+```
+
+Notes:
+- Opening `http://localhost:8081/` now defaults to the host web app and canonicalizes to `/host/start`.
+- Player join links still use the root URL with query params, for example `http://localhost:8081/?joinCode=ABCD`.
 
 ## Spotify redirect URI rules
 

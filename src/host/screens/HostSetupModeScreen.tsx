@@ -1,8 +1,8 @@
 import React from "react";
 import Slider from "@react-native-community/slider";
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import { BBButton } from "../../components/BBButton";
-import { Colors } from "../../theme";
+import { Colors, Radius } from "../../theme";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -25,62 +25,141 @@ export function HostSetupModeScreen({
   onCreateMode,
   notice,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const wideCards = width >= 980;
+
   return (
-    <HostLayout maxWidth={760} notice={notice}>
+    <HostLayout maxWidth={1080} notice={notice} headerEyebrow="Quiz Setup">
       <View
         style={{
           flex: 1,
           justifyContent: "center",
-          gap: 18,
+          gap: 20,
         }}
       >
         <View
           style={{
-            backgroundColor: "rgba(255,255,255,0.45)",
-            borderRadius: 16,
-            paddingHorizontal: 18,
-            paddingVertical: 14,
+            backgroundColor: Colors.navy,
+            borderRadius: Radius.xl,
+            paddingHorizontal: 24,
+            paddingVertical: 22,
+            gap: 12,
           }}
         >
           <Text
             style={{
-              color: Colors.textOnBg,
-              fontWeight: "800",
-              fontSize: 18,
+              color: "rgba(46,196,182,0.88)",
+              fontWeight: "900",
+              fontSize: 13,
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
               textAlign: "center",
             }}
           >
-            Fragen: {questionCount}
+            Spieltempo
+          </Text>
+          <Text
+            style={{
+              color: Colors.textOnNavy,
+              fontWeight: "900",
+              fontSize: 38,
+              textAlign: "center",
+            }}
+          >
+            {questionCount} Fragen
           </Text>
           <Slider
             minimumValue={10}
             maximumValue={100}
             step={10}
             value={questionCount}
-            minimumTrackTintColor={Colors.navy}
-            maximumTrackTintColor="rgba(15,23,42,0.2)"
-            thumbTintColor={Colors.navy}
+            minimumTrackTintColor={Colors.bg}
+            maximumTrackTintColor="rgba(46,196,182,0.32)"
+            thumbTintColor={Colors.bg}
             onValueChange={(value) => onQuestionCountChange(normalizeQuestionCount(value))}
             onSlidingComplete={(value) =>
               onQuestionCountChange(normalizeQuestionCount(value))
             }
           />
+          <View style={{ flexDirection: wideCards ? "row" : "column", gap: 10 }}>
+            {[
+              "10-20 für schnelle Runden",
+              "30-50 für den Hauptmodus",
+              "60+ nur für lange Sessions",
+            ].map((hint) => (
+              <View
+                key={hint}
+                style={{
+                  flex: 1,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                }}
+              >
+                <Text
+                  style={{
+                    color: Colors.textOnNavy,
+                    fontSize: 14,
+                    fontWeight: "700",
+                    textAlign: "center",
+                  }}
+                >
+                  {hint}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
-        <View style={{ flexDirection: "row", gap: 12, justifyContent: "center" }}>
-          <BBButton
-            title="Choose Quiz"
+
+        <View style={{ flexDirection: wideCards ? "row" : "column", gap: 16 }}>
+          <ModeCard
+            title=""
+            cta="Aus Playlists wählen"
             onPress={onChooseMode}
-            style={{ width: 220 }}
-            textStyle={{ fontSize: 17 }}
           />
-          <BBButton
-            title="Create Quiz"
+          <ModeCard
+            title=""
+            cta="Mit Playlist-ID starten"
             onPress={onCreateMode}
-            style={{ width: 220 }}
-            textStyle={{ fontSize: 17 }}
           />
         </View>
       </View>
     </HostLayout>
+  );
+}
+
+function ModeCard({
+  title,
+  cta,
+  onPress,
+}: {
+  title: string;
+  cta: string;
+  onPress: () => void;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(255,255,255,0.76)",
+        borderRadius: Radius.xl,
+        paddingHorizontal: 22,
+        paddingVertical: 22,
+        gap: 14,
+      }}
+    >
+      <Text
+        style={{
+          color: Colors.textOnBg,
+          fontSize: 28,
+          lineHeight: 32,
+          fontWeight: "900",
+        }}
+      >
+        {title}
+      </Text>
+      <BBButton title={cta} onPress={onPress} style={{ height: 62 }} textStyle={{ fontSize: 20, fontWeight: "800" }} />
+    </View>
   );
 }

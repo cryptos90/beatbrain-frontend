@@ -2,6 +2,7 @@ import { API_BASE_URL } from "../config";
 import { getStoredHostJwt, setStoredHostJwt } from "./authStorage";
 
 export type JsonRecord = Record<string, any>;
+const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
 
 export type ApiClientContext = {
   baseUrl?: string;
@@ -42,6 +43,48 @@ async function clearJwt(context: ApiClientContext) {
   await setStoredHostJwt(null);
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const sourceSignal = options.signal;
+  let timedOut = false;
+
+  const abortFromSource = () => {
+    controller.abort();
+  };
+
+  if (sourceSignal) {
+    if (sourceSignal.aborted) {
+      controller.abort();
+    } else {
+      sourceSignal.addEventListener("abort", abortFromSource, { once: true });
+    }
+  }
+
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`Request timed out after ${Math.ceil(timeoutMs / 1000)}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+    sourceSignal?.removeEventListener("abort", abortFromSource);
+  }
+}
+
 export async function requestJson(
   context: ApiClientContext,
   path: string,
@@ -71,7 +114,7 @@ export async function requestJson(
   const baseUrl = context.baseUrl ?? API_BASE_URL;
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetchWithTimeout(`${baseUrl}${path}`, {
       ...options,
       headers,
     });
@@ -82,7 +125,7 @@ export async function requestJson(
   if (response.status === 401 && retry && jwt) {
     let refreshResponse: Response;
     try {
-      refreshResponse = await fetch(`${baseUrl}/auth/refresh`, {
+      refreshResponse = await fetchWithTimeout(`${baseUrl}/auth/refresh`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${jwt}`,
@@ -152,4 +195,3 @@ export async function requestJson(
   const text = await response.text();
   return text ? (JSON.parse(text) as JsonRecord) : {};
 }
-

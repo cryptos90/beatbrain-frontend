@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { Image, Modal, Platform, Text, TextInput, View } from "react-native";
 import { AppHeader } from "../../components/AppHeader";
 import { BBButton } from "../../components/BBButton";
+import { deriveApiBaseUrlFromJoinUrl } from "../../shared/config";
 import { Colors } from "../../theme";
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
   joinError: string | null;
   onBack: () => void;
   onSessionIdChange: (value: string) => void;
+  onBackendUrlDetected?: (value: string | null) => void;
   onNameChange: (value: string) => void;
   onPickAvatarCamera: () => void;
   onPickAvatarLibrary: () => void;
@@ -20,7 +22,7 @@ type Props = {
 
 const JOIN_CODE_MIN_LENGTH = 4;
 
-function parseJoinCodeFromQr(rawData: string) {
+function parseJoinPayloadFromQr(rawData: string) {
   const raw = String(rawData ?? "").trim();
   if (!raw) {
     return null;
@@ -28,7 +30,10 @@ function parseJoinCodeFromQr(rawData: string) {
 
   const fromQueryMatch = raw.match(/[?&](joinCode|sessionId|code)=([^&#]+)/i);
   if (fromQueryMatch?.[2]) {
-    return decodeURIComponent(fromQueryMatch[2]).trim().toUpperCase();
+    return {
+      joinCode: decodeURIComponent(fromQueryMatch[2]).trim().toUpperCase(),
+      backendUrl: deriveApiBaseUrlFromJoinUrl(raw),
+    };
   }
 
   try {
@@ -38,7 +43,10 @@ function parseJoinCodeFromQr(rawData: string) {
       url.searchParams.get("sessionId") ??
       url.searchParams.get("code");
     if (fromParams) {
-      return fromParams.trim().toUpperCase();
+      return {
+        joinCode: fromParams.trim().toUpperCase(),
+        backendUrl: deriveApiBaseUrlFromJoinUrl(url.toString()),
+      };
     }
   } catch {
     // Not a URL. Continue with direct-code fallback.
@@ -46,7 +54,10 @@ function parseJoinCodeFromQr(rawData: string) {
 
   const directCode = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (directCode.length >= JOIN_CODE_MIN_LENGTH) {
-    return directCode;
+    return {
+      joinCode: directCode,
+      backendUrl: null,
+    };
   }
 
   return null;
@@ -59,6 +70,7 @@ export function MultiplayerJoinView({
   joinError,
   onBack,
   onSessionIdChange,
+  onBackendUrlDetected,
   onNameChange,
   onPickAvatarCamera,
   onPickAvatarLibrary,
@@ -106,8 +118,8 @@ export function MultiplayerJoinView({
       return;
     }
 
-    const resolvedJoinCode = parseJoinCodeFromQr(rawData);
-    if (!resolvedJoinCode) {
+    const resolvedJoinPayload = parseJoinPayloadFromQr(rawData);
+    if (!resolvedJoinPayload) {
       setScanHandled(true);
       setScannerError("QR-Code enthält keine gültige Session-ID.");
       return;
@@ -116,7 +128,8 @@ export function MultiplayerJoinView({
     setScanHandled(true);
     setScannerVisible(false);
     setScannerError(null);
-    onSessionIdChange(resolvedJoinCode);
+    onSessionIdChange(resolvedJoinPayload.joinCode);
+    onBackendUrlDetected?.(resolvedJoinPayload.backendUrl);
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Text, View, useWindowDimensions } from "react-native";
 import { Colors, Radius } from "../../theme";
 import type { LobbyPlayer, LobbyState, QuizQuestion } from "../../shared/types/app";
@@ -25,13 +25,27 @@ type AnswerGroup = {
   players: LobbyPlayer[];
 };
 
+type AnswerTile = {
+  id: string;
+  label: string;
+  answer: string;
+  players: LobbyPlayer[];
+  kind: "correct" | "wrong";
+  subtitle?: string | null;
+  emptyMessage?: string | null;
+};
+
 function normalizeAnswer(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function playerChips(players: LobbyPlayer[], compact = false) {
+  const avatarSize = compact ? 72 : 28;
+  const chipGap = compact ? 10 : 6;
+  const chipPaddingVertical = compact ? 8 : 4;
+  const chipPaddingHorizontal = compact ? 12 : 8;
+  const labelFontSize = compact ? 18 : 13;
+
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {players.map((player) => (
@@ -42,23 +56,23 @@ function playerChips(players: LobbyPlayer[], compact = false) {
             alignItems: "center",
             backgroundColor: "rgba(255,255,255,0.18)",
             borderRadius: 999,
-            paddingVertical: compact ? 3 : 4,
-            paddingHorizontal: compact ? 7 : 8,
-            gap: 6,
+            paddingVertical: chipPaddingVertical,
+            paddingHorizontal: chipPaddingHorizontal,
+            gap: chipGap,
           }}
         >
           <Image
             source={{ uri: player.avatarDataUrl }}
             style={{
-              width: compact ? 24 : 28,
-              height: compact ? 24 : 28,
-              borderRadius: compact ? 12 : 14,
+              width: avatarSize,
+              height: avatarSize,
+              borderRadius: avatarSize / 2,
             }}
           />
           <Text
             style={{
               color: Colors.textOnNavy,
-              fontSize: compact ? 12 : 13,
+              fontSize: labelFontSize,
               fontWeight: "700",
             }}
           >
@@ -87,6 +101,8 @@ export function HostQuizScreen({
 }: Props) {
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const players = lobby?.players ?? [];
+  const answeredCount = players.filter((player) => player.answered).length;
+  const openCount = Math.max(0, totalPlayers - answeredCount);
   const shouldShowTimer = Boolean(
     question && (lobby?.status === "question" || lobby?.status === "reveal"),
   );
@@ -167,9 +183,6 @@ export function HostQuizScreen({
     return Array.from(grouped.values()).sort((a, b) => b.players.length - a.players.length);
   }, [correctAnswer, players, correctYear, isYearInputQuestion, toleranceYears]);
 
-  const wrongAnswersTitle =
-    wrongAnswerGroups.length > 1 ? "Falsche Antworten" : "Falsche Antwort";
-
   const latestQuestionCountdownRef = useRef(0);
   const [frozenRevealCountdownMs, setFrozenRevealCountdownMs] = useState(0);
   const questionKeyRef = useRef<string | null>(null);
@@ -197,320 +210,366 @@ export function HostQuizScreen({
   const visibleCountdownMs =
     lobby?.status === "reveal" ? frozenRevealCountdownMs : Math.max(0, countdownMs);
   const secondsLeft = Math.max(0, Math.ceil(visibleCountdownMs / 1000));
+  const answerProgress =
+    totalPlayers > 0 ? Math.max(0, Math.min(1, answeredCount / totalPlayers)) : 0;
   const nextQuestionProgress =
-    totalPlayers > 0
-      ? Math.max(0, Math.min(1, readyCount / totalPlayers))
-      : 0;
+    totalPlayers > 0 ? Math.max(0, Math.min(1, readyCount / totalPlayers)) : 0;
+  const missingReadyCount = Math.max(0, totalPlayers - readyCount);
+  const shouldShowNextQuestionStatus = Boolean(
+    question && totalPlayers > 0 && (lobby?.status === "reveal" || readyCount > 0 || allContinued),
+  );
+  const shouldCenterPrimaryStage = Boolean(
+    question && !correctAnswer && !shouldShowSongInfo && !shouldShowNextQuestionStatus,
+  );
 
-  const compactAnswersLayout = viewportWidth < 1100;
+  const compactAnswersLayout = viewportWidth < 920;
+  const wideTopRow = viewportWidth >= 1180;
   const songCardMaxWidth = Math.min(500, Math.max(320, Math.round(viewportWidth * 0.46)));
   const coverSize = Math.min(
     176,
     Math.max(116, Math.round(Math.min(songCardMaxWidth * 0.5, viewportHeight * 0.22))),
   );
+  const answerTiles = useMemo<AnswerTile[]>(() => {
+    if (!correctAnswer) {
+      return [];
+    }
+
+    const tiles: AnswerTile[] = [
+      {
+        id: "correct",
+        label: "Korrekte Antwort",
+        answer: correctAnswer,
+        players: correctPlayers,
+        kind: "correct",
+        subtitle:
+          isYearInputQuestion && Number.isFinite(correctYear)
+            ? `Toleranz: ${correctYear - toleranceYears} bis ${correctYear + toleranceYears}`
+            : null,
+        emptyMessage: "Niemand hat korrekt geantwortet.",
+      },
+    ];
+
+    for (const group of wrongAnswerGroups) {
+      tiles.push({
+        id: `wrong-${normalizeAnswer(group.answer)}`,
+        label: "Falsche Antwort",
+        answer: group.answer,
+        players: group.players,
+        kind: "wrong",
+      });
+    }
+
+    return tiles;
+  }, [
+    correctAnswer,
+    correctPlayers,
+    correctYear,
+    isYearInputQuestion,
+    toleranceYears,
+    wrongAnswerGroups,
+  ]);
+  const answerTileColumns =
+    answerTiles.length === 0 ? 1 : compactAnswersLayout ? 1 : Math.min(answerTiles.length, 4);
+  const answerTileWidth = `${100 / answerTileColumns}%` as `${number}%`;
+  const answerTileGap = 12;
+  const shouldSplitRevealInfoRow = shouldShowNextQuestionStatus && shouldShowSongInfo;
+
 
   return (
-    <HostLayout notice={notice}>
+    <HostLayout maxWidth={1520} notice={notice} compactHeader headerEyebrow="Live Quiz">
       <View
         style={{
           flex: 1,
-          paddingTop: 100,
-          paddingBottom: 6,
-          gap: 8,
+          paddingBottom: 10,
+          gap: 14,
+          justifyContent: shouldCenterPrimaryStage ? "center" : "flex-start",
         }}
       >
-        <Text
+        <View
           style={{
-            color: Colors.textOnBg,
-            fontSize: 17,
-            fontWeight: "800",
-            textAlign: "center",
+            backgroundColor: Colors.navy,
+            borderRadius: Radius.xl,
+            paddingHorizontal: 24,
+            paddingVertical: shouldCenterPrimaryStage ? 32 : 22,
+            gap: 16,
+            minHeight: shouldCenterPrimaryStage ? Math.min(420, Math.max(260, viewportHeight * 0.32)) : undefined,
           }}
         >
-          Session: {lobby?.joinCode ?? "-"}
-        </Text>
-
-        {shouldShowTimer && (
-          <>
-            <Text
-              style={{
-                color: Colors.textOnBg,
-                fontSize: 36,
-                fontWeight: "900",
-                textAlign: "center",
-                lineHeight: 40,
-              }}
-            >
-              {secondsLeft}s
-            </Text>
-          </>
-        )}
-
-        {!!playbackError && (
           <View
             style={{
-              backgroundColor: "#fde68a",
-              borderRadius: 14,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
+              flexDirection: wideTopRow ? "row" : "column",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: wideTopRow ? "flex-start" : "stretch",
             }}
           >
-            <Text style={{ color: "#78350f", fontWeight: "800", textAlign: "center" }}>
-              {playbackError}
-            </Text>
-          </View>
-        )}
+            <View style={{ flex: 1, gap: 10 }}>
+              <Text
+                style={{
+                  color: Colors.textOnNavy,
+                  fontSize: question ? (viewportWidth >= 1280 ? 52 : 42) : 34,
+                  fontWeight: "900",
+                  lineHeight: question ? (viewportWidth >= 1280 ? 58 : 48) : 40,
+                  textAlign: "center"
+                }}
+              >
+                {question ? question.questionObject.questionText : "Warte auf die erste Frage..."}
+              </Text>
+              
+            </View>
 
-        {!!socketError && (
-          <Text style={{ color: "red", textAlign: "center", fontWeight: "700" }}>
-            {socketError}
-          </Text>
-        )}
+            {shouldShowTimer && (
+              <View
+                style={{
+                  minWidth: wideTopRow ? 188 : undefined,
+                  borderRadius: Radius.xl,
+                  backgroundColor:
+                    secondsLeft <= 5 ? "rgba(220,38,38,0.92)" : "rgba(255,255,255,0.12)",
+                  paddingHorizontal: 18,
+                  paddingVertical: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: Colors.textOnNavy,
+                    fontSize: 14,
+                    fontWeight: "900",
+                    letterSpacing: 1.2,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Timer
+                </Text>
+                <Text
+                  style={{
+                    color: Colors.textOnNavy,
+                    fontSize: wideTopRow ? 72 : 60,
+                    lineHeight: wideTopRow ? 78 : 66,
+                    fontWeight: "900",
+                  }}
+                >
+                  {secondsLeft}s
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {question && !correctAnswer && (
+            <View
+              style={{
+                borderRadius: Radius.lg,
+                backgroundColor: "rgba(255,255,255,0.1)",
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                gap: 10,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: wideTopRow ? "row" : "column",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: Colors.textOnNavy,
+                    fontSize: 20,
+                    fontWeight: "800",
+                  }}
+                >
+                  Antworten: {answeredCount}/{totalPlayers}
+                </Text>
+                
+              </View>
+              <View
+                style={{
+                  height: 16,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  overflow: "hidden",
+                }}
+              >
+                <View
+                  style={{
+                    height: "100%",
+                    width: `${Math.round(answerProgress * 100)}%`,
+                    backgroundColor: Colors.textOnNavy,
+                  }}
+                />
+              </View>
+            </View>
+          )}
+
+          {!!playbackError && (
+            <View
+              style={{
+                backgroundColor: "#fde68a",
+                borderRadius: 14,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+              }}
+            >
+              <Text style={{ color: "#78350f", fontWeight: "800", textAlign: "center" }}>
+                {playbackError}
+              </Text>
+            </View>
+          )}
+
+          {!!socketError && (
+            <Text style={{ color: "#fee2e2", textAlign: "center", fontWeight: "700" }}>
+              {socketError}
+            </Text>
+          )}
+
+          {actionBusy && (
+            <Text
+              style={{
+                color: "rgba(46,196,182,0.92)",
+                textAlign: "center",
+                fontWeight: "800",
+              }}
+            >
+              Host aktualisiert den Raumstatus...
+            </Text>
+          )}
+        </View>
 
         {question ? (
           <>
-            <View
-            style={{
-              backgroundColor: Colors.navy,
-              borderRadius: Radius.xl,
-              paddingVertical: 18,
-              paddingHorizontal: 16,
-            }}
-          >
-            <Text
-              style={{
-                color: Colors.textOnNavy,
-                fontSize: 40,
-                fontWeight: "800",
-                textAlign: "center",
-              }}
-            >
-              {question.questionObject.questionText}
-            </Text>
-          </View>
-
-            {!!correctAnswer && (
-              <>
-                <View
-                  style={{
-                    flexDirection: compactAnswersLayout ? "column" : "row",
-                    gap: 10,
-                  }}
-                >
+            {!!correctAnswer && answerTiles.length > 0 && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  marginHorizontal: compactAnswersLayout ? 0 : -(answerTileGap / 2),
+                }}
+              >
+                {answerTiles.map((tile) => (
                   <View
+                    key={tile.id}
                     style={{
-                      flex: wrongAnswerGroups.length > 0 && !compactAnswersLayout ? 0.44 : 1,
-                      backgroundColor: "#16a34a",
-                      borderRadius: Radius.xl,
-                      paddingVertical: 14,
-                      paddingHorizontal: 12,
-                      gap: 8,
+                      width: answerTileWidth,
+                      paddingHorizontal: compactAnswersLayout ? 0 : answerTileGap / 2,
+                      paddingBottom: answerTileGap,
                     }}
                   >
-                    <Text
-                      style={{
-                        color: Colors.textOnNavy,
-                        fontSize: 18,
-                        fontWeight: "800",
-                        textAlign: "center",
-                      }}
-                    >
-                      Korrekte Antwort
-                    </Text>
-                    <Text
-                      style={{
-                        color: Colors.textOnNavy,
-                        fontSize: 27,
-                        fontWeight: "900",
-                        textAlign: "center",
-                      }}
-                    >
-                      {correctAnswer}
-                    </Text>
-                    {isYearInputQuestion && Number.isFinite(correctYear) && (
-                      <Text
-                        style={{
-                          color: Colors.textOnNavy,
-                          fontSize: 14,
-                          textAlign: "center",
-                          opacity: 0.92,
-                        }}
-                      >
-                        Toleranz: {correctYear - toleranceYears} bis {correctYear + toleranceYears}
-                      </Text>
-                    )}
-                    {correctPlayers.length > 0 ? (
-                      playerChips(correctPlayers, true)
-                    ) : (
-                      <Text
-                        style={{
-                          color: Colors.textOnNavy,
-                          textAlign: "center",
-                          fontSize: 13,
-                          fontWeight: "700",
-                        }}
-                      >
-                        Niemand hat korrekt geantwortet.
-                      </Text>
-                    )}
-                  </View>
-
-                {wrongAnswerGroups.length > 0 && (
-                  <View
-                    style={{
-                      flex: compactAnswersLayout ? undefined : 0.56,
-                      backgroundColor: "#dc2626",
-                      borderRadius: Radius.xl,
-                      paddingVertical: 14,
-                      paddingHorizontal: 12,
-                      gap: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: Colors.textOnNavy,
-                        fontSize: 17,
-                        fontWeight: "800",
-                        textAlign: "center",
-                      }}
-                    >
-                      {wrongAnswersTitle}
-                    </Text>
-
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      {wrongAnswerGroups.map((group) => (
-                        <View
-                          key={group.answer}
-                          style={{
-                            flexBasis: compactAnswersLayout ? "100%" : "31%",
-                            flexGrow: 1,
-                            backgroundColor: "rgba(127,29,29,0.55)",
-                            borderRadius: 12,
-                            paddingVertical: 8,
-                            paddingHorizontal: 8,
-                            gap: 6,
-                            minWidth: compactAnswersLayout ? undefined : 128,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: Colors.textOnNavy,
-                              fontSize: 16,
-                              fontWeight: "800",
-                              textAlign: "center",
-                            }}
-                          >
-                            {group.answer}
-                          </Text>
-                          {playerChips(group.players, true)}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-                </View>
-              </>
-            )}
-
-            {shouldShowSongInfo && (
-              <View style={{ marginTop: 100, gap: 12 }}>
-                <View
-                  style={{
-                    alignSelf: "center",
-                    width: "100%",
-                    maxWidth: songCardMaxWidth,
-                    backgroundColor: Colors.navy,
-                    borderRadius: Radius.xl,
-                    paddingVertical: 14,
-                    paddingHorizontal: 14,
-                    gap: 8,
-                    marginBottom: 50
-                  }}
-                >
-                  {!!question.trackInfo.coverUrl ? (
-                    <Image
-                      source={{ uri: question.trackInfo.coverUrl }}
-                      resizeMode="cover"
-                      style={{
-                        width: coverSize,
-                        height: coverSize,
-                        borderRadius: 12,
-                        alignSelf: "center",
-                      }}
-                    />
-                  ) : (
                     <View
                       style={{
-                        width: coverSize,
-                        height: coverSize,
-                        borderRadius: 12,
-                        backgroundColor: "rgba(255,255,255,0.12)",
-                        alignSelf: "center",
+                        minHeight: answerTileColumns === 1 ? 220 : 240,
+                        height: "100%",
+                        backgroundColor: tile.kind === "correct" ? "#16a34a" : "#dc2626",
+                        borderRadius: Radius.xl,
+                        paddingVertical: 18,
+                        paddingHorizontal: 16,
+                        gap: 12,
+                        justifyContent: "space-between",
                       }}
-                    />
-                  )}
+                    >
+                      <View style={{ gap: 10 }}>
+                        <Text
+                          style={{
+                            color: Colors.navy,
+                            fontSize: 16,
+                            fontWeight: "900",
+                            textAlign: "center",
+                            letterSpacing: 1,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {tile.label}
+                        </Text>
+                        <Text
+                          style={{
+                            color: Colors.navy,
+                            fontSize: 34,
+                            fontWeight: "900",
+                            textAlign: "center",
+                            lineHeight: 38,
+                          }}
+                        >
+                          {tile.answer}
+                        </Text>
+                        {!!tile.subtitle && (
+                          <Text
+                            style={{
+                              color: Colors.navy,
+                              fontSize: 15,
+                              textAlign: "center",
+                              opacity: 0.92,
+                            }}
+                          >
+                            {tile.subtitle}
+                          </Text>
+                        )}
+                      </View>
 
-                  <Text
-                    style={{
-                      color: Colors.textOnNavy,
-                      fontSize: 24,
-                      fontWeight: "900",
-                      textAlign: "center",
-                    }}
-                  >
-                    {question.trackInfo.name}
-                  </Text>
-                  <Text
-                    style={{
-                      color: Colors.textOnNavy,
-                      fontSize: 17,
-                      textAlign: "center",
-                      opacity: 0.95,
-                    }}
-                  >
-                    {question.trackInfo.artist}
-                  </Text>
-                  <Text
-                    style={{
-                      color: Colors.textOnNavy,
-                      fontSize: 15,
-                      textAlign: "center",
-                      opacity: 0.9,
-                    }}
-                  >
-                    {question.trackInfo.album}
-                  </Text>
-                  <Text
-                    style={{
-                      color: Colors.textOnNavy,
-                      fontSize: 14,
-                      textAlign: "center",
-                      opacity: 0.9,
-                    }}
-                  >
-                    Jahr: {question.trackInfo.year || "?"}
-                  </Text>
-                </View>
+                      {tile.players.length > 0 ? (
+                        playerChips(tile.players, true)
+                      ) : !!tile.emptyMessage ? (
+                        <Text
+                          style={{
+                            color: Colors.navy,
+                            textAlign: "center",
+                            fontSize: 15,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {tile.emptyMessage}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
 
-                {lobby?.status === "reveal" && (
-                  <View style={{ alignSelf: "center", width: "100%", maxWidth: 520, gap: 10 }}>
+            {(shouldShowNextQuestionStatus || shouldShowSongInfo) && (
+              <View
+                style={{
+                  flexDirection: shouldSplitRevealInfoRow ? "row" : "column",
+                  gap: 12,
+                  alignItems: "stretch",
+                }}
+              >
+                {shouldShowNextQuestionStatus && (
+                  <View
+                    style={{
+                      flex: shouldSplitRevealInfoRow ? 1 : undefined,
+                      borderRadius: Radius.xl,
+                      backgroundColor: "rgba(255,255,255,0.76)",
+                      paddingVertical: 18,
+                      paddingHorizontal: 18,
+                      gap: 12,
+                    }}
+                  >
                     <Text
                       style={{
                         color: Colors.textOnBg,
-                        textAlign: "center",
-                        fontWeight: "900",
                         fontSize: 24,
+                        fontWeight: "900",
+                        textAlign: "center",
                       }}
                     >
                       Nächste Frage
                     </Text>
+                    <Text
+                      style={{
+                        color: "rgba(32,44,89,0.88)",
+                        fontSize: 18,
+                        fontWeight: "700",
+                        textAlign: "center",
+                      }}
+                    >
+                      {readyCount}/{totalPlayers} bereit
+                    </Text>
                     <View
                       style={{
-                        alignSelf: "center",
-                        width: "100%",
-                        height: 20,
+                        height: 16,
                         borderRadius: 999,
-                        backgroundColor: "rgba(32,44,89,0.24)",
+                        backgroundColor: "rgba(32,44,89,0.14)",
                         overflow: "hidden",
                       }}
                     >
@@ -522,30 +581,136 @@ export function HostQuizScreen({
                         }}
                       />
                     </View>
-                    {allContinued && (
-                      <Text
+                  </View>
+                )}
+
+                {shouldShowSongInfo && (
+                  <View
+                    style={{
+                      flex: shouldSplitRevealInfoRow ? 1 : undefined,
+                      width: shouldSplitRevealInfoRow ? undefined : "100%",
+                      maxWidth: shouldSplitRevealInfoRow ? undefined : songCardMaxWidth,
+                      alignSelf: shouldSplitRevealInfoRow ? undefined : "center",
+                      backgroundColor: Colors.navy,
+                      borderRadius: Radius.xl,
+                      paddingVertical: 18,
+                      paddingHorizontal: 18,
+                      gap: 10,
+                    }}
+                  >
+                    {!!question.trackInfo.coverUrl ? (
+                      <Image
+                        source={{ uri: question.trackInfo.coverUrl }}
+                        resizeMode="cover"
                         style={{
-                          color: Colors.textOnBg,
-                          textAlign: "center",
-                          fontWeight: "800",
-                          fontSize: 16,
+                          width: coverSize,
+                          height: coverSize,
+                          borderRadius: 14,
+                          alignSelf: "center",
                         }}
-                      >
-                        Alle bereit. Nächste Frage startet automatisch.
-                      </Text>
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: coverSize,
+                          height: coverSize,
+                          borderRadius: 14,
+                          backgroundColor: "rgba(255,255,255,0.12)",
+                          alignSelf: "center",
+                        }}
+                      />
                     )}
+
+                    <Text
+                      style={{
+                        color: "rgba(46,196,182,0.88)",
+                        fontSize: 12,
+                        fontWeight: "900",
+                        letterSpacing: 1.1,
+                        textTransform: "uppercase",
+                        textAlign: "center",
+                      }}
+                    >
+                      Song-Info
+                    </Text>
+                    <Text
+                      style={{
+                        color: Colors.textOnNavy,
+                        fontSize: 28,
+                        fontWeight: "900",
+                        textAlign: "center",
+                      }}
+                    >
+                      {question.trackInfo.name}
+                    </Text>
+                    <Text
+                      style={{
+                        color: Colors.textOnNavy,
+                        fontSize: 18,
+                        textAlign: "center",
+                        opacity: 0.95,
+                      }}
+                    >
+                      {question.trackInfo.artist}
+                    </Text>
+                    <Text
+                      style={{
+                        color: Colors.textOnNavy,
+                        fontSize: 16,
+                        textAlign: "center",
+                        opacity: 0.9,
+                      }}
+                    >
+                      {question.trackInfo.album}
+                    </Text>
+                    <Text
+                      style={{
+                        color: Colors.textOnNavy,
+                        fontSize: 15,
+                        textAlign: "center",
+                        opacity: 0.9,
+                      }}
+                    >
+                      Jahr: {question.trackInfo.year || "?"}
+                    </Text>
                   </View>
                 )}
               </View>
             )}
           </>
         ) : (
-          <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
-            Warte auf die erste Frage...
-          </Text>
+          <View
+            style={{
+              borderRadius: Radius.xl,
+              backgroundColor: "rgba(255,255,255,0.72)",
+              paddingVertical: 24,
+              paddingHorizontal: 20,
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: Colors.textOnBg,
+                textAlign: "center",
+                fontWeight: "900",
+                fontSize: 28,
+              }}
+            >
+              Warte auf die erste Frage...
+            </Text>
+            <Text
+              style={{
+                color: "rgba(32,44,89,0.84)",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+                lineHeight: 23,
+              }}
+            >
+              Sobald die Runde gestartet wird, erscheinen Frage und Timer hier.
+            </Text>
+          </View>
         )}
-
-        
       </View>
     </HostLayout>
   );

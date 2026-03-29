@@ -159,6 +159,7 @@ export function AppRouter({ app }: Props) {
             app.setScreen({ name: "start" });
           }}
           onSessionIdChange={app.setMpJoinCodeInput}
+          onBackendUrlDetected={app.setMultiplayerApiBaseUrl}
           onNameChange={app.setMpPlayerName}
           onPickAvatarCamera={app.pickPlayerAvatarFromCamera}
           onPickAvatarLibrary={app.pickPlayerAvatarFromLibrary}
