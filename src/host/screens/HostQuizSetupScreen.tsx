@@ -13,6 +13,7 @@ import { BBButton } from "../../components/BBButton";
 import { CARD_W } from "../../constants/app";
 import { Colors, Radius } from "../../theme";
 import type { PlaylistCard } from "../../shared/types/app";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -34,6 +35,7 @@ export function HostQuizSetupScreen({
   onCreateSession,
   notice,
 }: Props) {
+  const { fluid } = useHostViewport();
   const scrollRef = useRef<ScrollView | null>(null);
   const [carouselWidth, setCarouselWidth] = useState(Math.max(680, CARD_W * 2.8));
   const itemSpacing = 14;
@@ -113,7 +115,7 @@ export function HostQuizSetupScreen({
       <View
         style={{
           width: "100%",
-          gap: 16,
+          gap: fluid(16, 12, 16, "height"),
         }}
       >
         <View
@@ -123,15 +125,15 @@ export function HostQuizSetupScreen({
             width: "100%",
             borderRadius: Radius.xl,
             backgroundColor: "rgba(255,255,255,0.72)",
-            paddingHorizontal: 18,
-            paddingVertical: 16,
-            gap: 8,
+            paddingHorizontal: fluid(18, 14, 18),
+            paddingVertical: fluid(16, 12, 16, "height"),
+            gap: fluid(8, 6, 8, "height"),
           }}
         >
           <Text
             style={{
               color: Colors.textOnBg,
-              fontSize: 24,
+              fontSize: fluid(24, 20, 24),
               fontWeight: "900",
               textAlign: "center",
             }}
@@ -141,8 +143,8 @@ export function HostQuizSetupScreen({
           <Text
             style={{
               color: "rgba(32,44,89,0.84)",
-              fontSize: 15,
-              lineHeight: 22,
+              fontSize: fluid(15, 13, 15),
+              lineHeight: fluid(22, 18, 22),
               fontWeight: "600",
               textAlign: "center",
             }}
@@ -237,9 +239,9 @@ export function HostQuizSetupScreen({
               width: "100%",
               backgroundColor: Colors.navy,
               borderRadius: Radius.xl,
-              paddingVertical: 16,
-              paddingHorizontal: 18,
-              gap: 8,
+              paddingVertical: fluid(16, 12, 16, "height"),
+              paddingHorizontal: fluid(18, 14, 18),
+              gap: fluid(8, 6, 8, "height"),
             }}
           >
             <Text
@@ -258,7 +260,7 @@ export function HostQuizSetupScreen({
               numberOfLines={2}
               style={{
                 color: Colors.textOnNavy,
-                fontSize: 26,
+                fontSize: fluid(26, 22, 26),
                 fontWeight: "900",
                 textAlign: "center",
               }}
@@ -290,8 +292,8 @@ export function HostQuizSetupScreen({
             title={creatingSession ? "Quiz wird vorbereitet..." : "Diese Playlist starten"}
             onPress={onCreateSession}
             disabled={creatingSession}
-            style={{ height: 64 }}
-            textStyle={{ fontSize: 20, fontWeight: "800" }}
+            style={{ height: fluid(64, 54, 64, "height") }}
+            textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
           />
         </View>
       </View>

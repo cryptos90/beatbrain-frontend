@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Text, View, useWindowDimensions } from "react-native";
+import { Image, Text, View } from "react-native";
 import { Colors, Radius } from "../../theme";
 import type { LobbyPlayer, LobbyState, QuizQuestion } from "../../shared/types/app";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -99,7 +100,7 @@ export function HostQuizScreen({
   totalPlayers,
   notice,
 }: Props) {
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const { width: viewportWidth, height: viewportHeight, fluid } = useHostViewport();
   const players = lobby?.players ?? [];
   const answeredCount = players.filter((player) => player.answered).length;
   const openCount = Math.max(0, totalPlayers - answeredCount);
@@ -224,31 +225,14 @@ export function HostQuizScreen({
 
   const compactAnswersLayout = viewportWidth < 760;
   const wideTopRow = viewportWidth >= 1180;
-  const questionFontSize = !question
-    ? viewportWidth >= 900
-      ? 34
-      : 30
-    : viewportWidth >= 1680
-      ? 56
-      : viewportWidth >= 1280
-        ? 50
-        : viewportWidth >= 980
-          ? 42
-          : viewportWidth >= 720
-            ? 36
-            : 30;
-  const questionLineHeight = questionFontSize + (viewportWidth >= 980 ? 6 : 4);
-  const timerValueFontSize =
-    viewportWidth >= 1680 ? 76 : wideTopRow ? 68 : viewportWidth >= 980 ? 58 : viewportWidth >= 720 ? 52 : 46;
+  const questionFontSize = question ? fluid(48, 28, 56) : fluid(32, 24, 34);
+  const questionLineHeight = questionFontSize + fluid(question ? 6 : 5, 4, 7, "height");
+  const timerValueFontSize = fluid(wideTopRow ? 68 : 58, 40, 76);
   const timerValueLineHeight = timerValueFontSize + 6;
-  const stageHorizontalPadding = viewportWidth >= 980 ? 24 : viewportWidth >= 720 ? 20 : 16;
+  const stageHorizontalPadding = fluid(22, 14, 24);
   const stageVerticalPadding = shouldCenterPrimaryStage
-    ? viewportWidth >= 980
-      ? 32
-      : 24
-    : viewportWidth >= 980
-      ? 22
-      : 18;
+    ? fluid(28, 18, 32, "height")
+    : fluid(22, 16, 22, "height");
   const songCardMaxWidth = Math.min(
     viewportWidth >= 1180 ? 500 : 440,
     Math.max(280, Math.round(viewportWidth * (viewportWidth >= 1180 ? 0.46 : 0.66))),
@@ -309,7 +293,9 @@ export function HostQuizScreen({
   const answerTileWidth = `${100 / answerTileColumns}%` as `${number}%`;
   const answerTileGap = viewportWidth >= 760 ? 12 : 10;
   const answerTileMinHeight =
-    answerTileColumns === 1 ? (viewportWidth >= 720 ? 220 : 190) : viewportWidth >= 1120 ? 240 : 220;
+    answerTileColumns === 1
+      ? fluid(210, 176, 220, "height")
+      : fluid(viewportWidth >= 1120 ? 240 : 220, 190, 240, "height");
   const shouldSplitRevealInfoRow =
     shouldShowNextQuestionStatus && shouldShowSongInfo && viewportWidth >= 1080;
 

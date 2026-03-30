@@ -1,8 +1,9 @@
 import React from "react";
 import Slider from "@react-native-community/slider";
-import { Text, View, useWindowDimensions } from "react-native";
+import { Text, View } from "react-native";
 import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -25,24 +26,29 @@ export function HostSetupModeScreen({
   onCreateMode,
   notice,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, fluid } = useHostViewport();
   const wideCards = width >= 980;
+  const sectionGap = fluid(20, 14, 20, "height");
+  const cardPaddingX = fluid(24, 18, 24);
+  const cardPaddingY = fluid(22, 18, 22, "height");
+  const titleSize = fluid(38, 28, 38);
+  const hintSize = fluid(14, 12, 14);
 
   return (
     <HostLayout maxWidth={1080} notice={notice} headerEyebrow="Quiz Setup">
       <View
         style={{
           width: "100%",
-          gap: 20,
+          gap: sectionGap,
         }}
       >
         <View
           style={{
             backgroundColor: Colors.navy,
             borderRadius: Radius.xl,
-            paddingHorizontal: 24,
-            paddingVertical: 22,
-            gap: 12,
+            paddingHorizontal: cardPaddingX,
+            paddingVertical: cardPaddingY,
+            gap: fluid(12, 10, 12, "height"),
           }}
         >
           <Text
@@ -61,7 +67,7 @@ export function HostSetupModeScreen({
             style={{
               color: Colors.textOnNavy,
               fontWeight: "900",
-              fontSize: 38,
+              fontSize: titleSize,
               textAlign: "center",
             }}
           >
@@ -80,7 +86,7 @@ export function HostSetupModeScreen({
               onQuestionCountChange(normalizeQuestionCount(value))
             }
           />
-          <View style={{ flexDirection: wideCards ? "row" : "column", gap: 10 }}>
+          <View style={{ flexDirection: wideCards ? "row" : "column", gap: fluid(10, 8, 10, "height") }}>
             {[
               "10-20 für schnelle Runden",
               "30-50 für den Hauptmodus",
@@ -99,7 +105,7 @@ export function HostSetupModeScreen({
                 <Text
                   style={{
                     color: Colors.textOnNavy,
-                    fontSize: 14,
+                    fontSize: hintSize,
                     fontWeight: "700",
                     textAlign: "center",
                   }}
@@ -111,7 +117,7 @@ export function HostSetupModeScreen({
           </View>
         </View>
 
-        <View style={{ flexDirection: wideCards ? "row" : "column", gap: 16 }}>
+        <View style={{ flexDirection: wideCards ? "row" : "column", gap: fluid(16, 12, 16, "height") }}>
           <ModeCard
             title=""
             cta="Aus Playlists wählen"
@@ -137,15 +143,17 @@ function ModeCard({
   cta: string;
   onPress: () => void;
 }) {
+  const { fluid } = useHostViewport();
+
   return (
     <View
       style={{
         flex: 1,
         backgroundColor: "rgba(255,255,255,0.76)",
         borderRadius: Radius.xl,
-        paddingHorizontal: 22,
-        paddingVertical: 22,
-        gap: 14,
+        paddingHorizontal: fluid(22, 18, 22),
+        paddingVertical: fluid(22, 18, 22, "height"),
+        gap: fluid(14, 10, 14, "height"),
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -153,8 +161,8 @@ function ModeCard({
       <Text
         style={{
           color: Colors.textOnBg,
-          fontSize: 28,
-          lineHeight: 32,
+          fontSize: fluid(28, 22, 28),
+          lineHeight: fluid(32, 26, 32),
           fontWeight: "900",
         }}
       >
@@ -164,8 +172,8 @@ function ModeCard({
         <BBButton
           title={cta}
           onPress={onPress}
-          style={{ height: 62 }}
-          textStyle={{ fontSize: 20, fontWeight: "800" }}
+          style={{ height: fluid(62, 54, 62, "height") }}
+          textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
         />
       </View>
     </View>

@@ -1,8 +1,9 @@
 import React from "react";
-import { Image, Text, View, useWindowDimensions } from "react-native";
+import { Image, Text, View } from "react-native";
 import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -22,9 +23,10 @@ export function HostResultsScreen({
   onReturnToMenu,
   notice,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, fluid } = useHostViewport();
   const wideActions = width >= 860;
   const compactRows = width < 620;
+  const avatarSize = fluid(72, 58, 72);
   const sortedPlayers = [...(lobby?.players ?? [])].sort((a, b) => b.score - a.score);
 
   return (
@@ -33,14 +35,14 @@ export function HostResultsScreen({
       notice={notice}
       headerEyebrow="Results"
     >
-      <View style={{ width: "100%", gap: 14 }}>
+      <View style={{ width: "100%", gap: fluid(14, 10, 14, "height") }}>
         <View
           style={{
             borderRadius: Radius.xl,
             backgroundColor: Colors.navy,
-            paddingHorizontal: 22,
-            paddingVertical: 20,
-            gap: 8,
+            paddingHorizontal: fluid(22, 16, 22),
+            paddingVertical: fluid(20, 16, 20, "height"),
+            gap: fluid(8, 6, 8, "height"),
           }}
         >
           <Text
@@ -58,7 +60,7 @@ export function HostResultsScreen({
           <Text
             style={{
               color: Colors.textOnNavy,
-              fontSize: 34,
+              fontSize: fluid(34, 26, 34),
               fontWeight: "900",
               textAlign: "center",
             }}
@@ -76,17 +78,17 @@ export function HostResultsScreen({
             style={{
               backgroundColor: index === 0 ? Colors.navy : Colors.white,
               borderRadius: Radius.lg,
-              paddingVertical: 14,
-              paddingHorizontal: 16,
+              paddingVertical: fluid(14, 12, 14, "height"),
+              paddingHorizontal: fluid(16, 12, 16),
               flexDirection: compactRows ? "column" : "row",
               alignItems: "center",
-              gap: 12,
+              gap: fluid(12, 10, 12, "height"),
             }}
           >
             <Text
               style={{
                 color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
-                fontSize: 24,
+                fontSize: fluid(24, 20, 24),
                 fontWeight: "900",
                 width: compactRows ? undefined : 42,
                 textAlign: "center",
@@ -96,7 +98,7 @@ export function HostResultsScreen({
             </Text>
             <Image
               source={{ uri: player.avatarDataUrl }}
-              style={{ width: 72, height: 72, borderRadius: 36 }}
+              style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
             />
             <View
               style={{
@@ -107,7 +109,7 @@ export function HostResultsScreen({
               <Text
                 style={{
                   color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
-                  fontSize: 24,
+                  fontSize: fluid(24, 20, 24),
                   fontWeight: "800",
                   textAlign: compactRows ? "center" : "left",
                 }}
@@ -117,7 +119,7 @@ export function HostResultsScreen({
               <Text
                 style={{
                   color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
-                  fontSize: 18,
+                  fontSize: fluid(18, 16, 18),
                   fontWeight: "700",
                   textAlign: compactRows ? "center" : "left",
                 }}
@@ -140,22 +142,22 @@ export function HostResultsScreen({
             maxWidth: 840,
             alignSelf: "center",
             flexDirection: wideActions ? "row" : "column",
-            gap: 12,
+            gap: fluid(12, 10, 12, "height"),
           }}
         >
           <BBButton
             title={actionBusy ? "Bitte warten..." : "Quiz erneut spielen"}
             onPress={onRestartQuiz}
             disabled={actionBusy}
-            style={{ flex: wideActions ? 1 : undefined, height: 62 }}
-            textStyle={{ fontSize: 19, fontWeight: "800" }}
+            style={{ flex: wideActions ? 1 : undefined, height: fluid(62, 54, 62, "height") }}
+            textStyle={{ fontSize: fluid(19, 17, 19), fontWeight: "800" }}
           />
           <BBButton
             title={actionBusy ? "Bitte warten..." : "Zurück zur Lobby"}
             onPress={onReturnToMenu}
             disabled={actionBusy}
-            style={{ flex: wideActions ? 1 : undefined, height: 62 }}
-            textStyle={{ fontSize: 19, fontWeight: "800" }}
+            style={{ flex: wideActions ? 1 : undefined, height: fluid(62, 54, 62, "height") }}
+            textStyle={{ fontSize: fluid(19, 17, 19), fontWeight: "800" }}
           />
         </View>
       </View>

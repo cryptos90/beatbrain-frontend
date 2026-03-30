@@ -1,8 +1,9 @@
 import React from "react";
-import { Image, Text, View, useWindowDimensions } from "react-native";
+import { Image, Text, View } from "react-native";
 import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
@@ -48,24 +49,23 @@ export function HostLobbyScreen({
   onOpenSetup,
   notice,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, fluid } = useHostViewport();
   const wideStage = width >= 1120;
   const gridColumns = width >= 1680 ? 5 : width >= 1320 ? 4 : width >= 980 ? 3 : width >= 640 ? 2 : 1;
-  const sessionCodeFontSize =
-    width >= 1440 ? 88 : width >= 1120 ? 80 : width >= 900 ? 68 : width >= 560 ? 56 : 44;
-  const sessionCodeLineHeight = sessionCodeFontSize + (width >= 900 ? 6 : 4);
-  const sessionCodeLetterSpacing = width >= 1120 ? 6 : width >= 900 ? 5 : width >= 560 ? 3 : 2;
-  const prepareButtonHeight = width >= 900 ? 82 : width >= 560 ? 72 : 64;
-  const prepareButtonFontSize = width >= 900 ? 24 : width >= 560 ? 22 : 19;
-  const qrSize = width >= 1280 ? 220 : width >= 900 ? 200 : width >= 560 ? 184 : 160;
-  const playerAvatarSize = width >= 900 ? 92 : width >= 560 ? 84 : 72;
-  const playerCardMinHeight = width >= 900 ? 196 : width >= 560 ? 180 : 164;
-  const playerNameFontSize = width >= 900 ? 22 : width >= 560 ? 20 : 18;
+  const sessionCodeFontSize = fluid(82, 40, 88);
+  const sessionCodeLineHeight = sessionCodeFontSize + fluid(6, 4, 8, "height");
+  const sessionCodeLetterSpacing = fluid(5, 2, 6, "width");
+  const prepareButtonHeight = fluid(78, 58, 82, "height");
+  const prepareButtonFontSize = fluid(23, 17, 24);
+  const qrSize = fluid(208, 148, 220);
+  const playerAvatarSize = fluid(88, 64, 92);
+  const playerCardMinHeight = fluid(188, 156, 196, "height");
+  const playerNameFontSize = fluid(21, 18, 22);
   const hasPlayers = Boolean(lobby?.players.length);
 
   return (
     <HostLayout maxWidth={1380} notice={notice} headerEyebrow="Lobby Stage">
-      <View style={{ width: "100%", gap: 18 }}>
+      <View style={{ width: "100%", gap: fluid(18, 12, 18, "height") }}>
         {!lobby ? (
           <View
             style={{
@@ -90,15 +90,15 @@ export function HostLobbyScreen({
           </View>
         ) : (
           <>
-            <View style={{ flexDirection: wideStage ? "row" : "column", gap: 18 }}>
+            <View style={{ flexDirection: wideStage ? "row" : "column", gap: fluid(18, 12, 18, "height") }}>
               <View
                 style={{
                   flex: wideStage ? 1.15 : undefined,
                   backgroundColor: Colors.navy,
                   borderRadius: Radius.xl,
-                  paddingHorizontal: 24,
-                  paddingVertical: 24,
-                  gap: 24,
+                  paddingHorizontal: fluid(24, 16, 24),
+                  paddingVertical: fluid(24, 16, 24, "height"),
+                  gap: fluid(24, 14, 24, "height"),
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -157,7 +157,7 @@ export function HostLobbyScreen({
                 <Text
                   style={{
                     color: Colors.textOnBg,
-                    fontSize: 14,
+                    fontSize: fluid(14, 12, 14),
                     fontWeight: "900",
                     letterSpacing: 1.2,
                     textTransform: "uppercase",
@@ -187,7 +187,7 @@ export function HostLobbyScreen({
                 <Text
                   style={{
                     color: Colors.textOnBg,
-                    fontSize: 19,
+                    fontSize: fluid(19, 16, 19),
                     fontWeight: "900",
                     textAlign: "center",
                   }}
@@ -214,8 +214,8 @@ export function HostLobbyScreen({
                 borderRadius: Radius.xl,
                 backgroundColor: hasPlayers ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.56)",
                 paddingHorizontal: 18,
-                paddingVertical: 18,
-                gap: 14,
+                paddingVertical: fluid(18, 14, 18, "height"),
+                gap: fluid(14, 10, 14, "height"),
                 alignItems: "center",
                 justifyContent: "center",
                 alignSelf: "stretch",
@@ -244,12 +244,12 @@ export function HostLobbyScreen({
                         style={{
                           borderRadius: Radius.lg,
                           backgroundColor: Colors.navy,
-                          paddingVertical: 16,
-                          paddingHorizontal: 12,
+                          paddingVertical: fluid(16, 12, 16, "height"),
+                          paddingHorizontal: fluid(12, 10, 12),
                           alignItems: "center",
                           justifyContent: "center",
                           minHeight: playerCardMinHeight,
-                          gap: 8,
+                          gap: fluid(8, 6, 8, "height"),
                         }}
                       >
                         <Image
@@ -272,7 +272,11 @@ export function HostLobbyScreen({
                           {player.name}
                         </Text>
                         <Text
-                          style={{ color: Colors.textOnNavy, fontSize: 18, fontWeight: "700" }}
+                          style={{
+                            color: Colors.textOnNavy,
+                            fontSize: fluid(18, 15, 18),
+                            fontWeight: "700",
+                          }}
                         >
                           Score: {player.score}
                         </Text>
@@ -288,7 +292,7 @@ export function HostLobbyScreen({
                           <Text
                             style={{
                               color: Colors.textOnNavy,
-                              fontSize: 14,
+                              fontSize: fluid(14, 12, 14),
                               fontWeight: "800",
                             }}
                           >

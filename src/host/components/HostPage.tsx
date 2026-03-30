@@ -1,5 +1,6 @@
 import React, { type ReactNode, useState } from "react";
-import { ScrollView, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { useHostViewport } from "../hooks/useHostViewport";
 
 type Props = {
   children: ReactNode;
@@ -7,13 +8,13 @@ type Props = {
 };
 
 export function HostPage({ children, maxWidth }: Props) {
-  const { width, height } = useWindowDimensions();
+  const { width, height, fluid } = useHostViewport();
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
 
-  const sidePadding = width >= 1440 ? 40 : width >= 1100 ? 32 : width >= 760 ? 24 : 16;
-  const topPadding = width >= 1100 ? 18 : width >= 760 ? 12 : 8;
-  const bottomPadding = width >= 1100 ? 28 : 18;
+  const sidePadding = fluid(width >= 760 ? 28 : 20, 16, 40, "width");
+  const topPadding = fluid(14, 6, 18, "height");
+  const bottomPadding = fluid(24, 14, 30, "height");
   const availableHeight = Math.max(0, viewportHeight - topPadding - bottomPadding);
   const shouldScroll = viewportHeight > 0 && contentHeight > availableHeight + 1;
   const shouldCenter = !shouldScroll;

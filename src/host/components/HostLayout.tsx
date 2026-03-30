@@ -1,6 +1,7 @@
 import React, { type ReactNode } from "react";
-import { Text, View, useWindowDimensions } from "react-native";
+import { Text, View } from "react-native";
 import { Colors } from "../../theme";
+import { useHostViewport } from "../hooks/useHostViewport";
 import { HostHeader } from "./HostHeader";
 import { HostPage } from "./HostPage";
 
@@ -23,12 +24,22 @@ export function HostLayout({
   headerSubtitle,
   compactHeader = false,
 }: Props) {
-  const { width, height } = useWindowDimensions();
-  const noticeOuterPadding = width >= 1100 ? 24 : width >= 760 ? 20 : 16;
+  const { width, height, isShortViewport, fluid } = useHostViewport();
+  const compactViewport = isShortViewport;
+  const noticeOuterPadding = fluid(width >= 760 ? 22 : 18, 16, 28, "width");
   const noticeMaxWidth = Math.min(maxWidth, Math.max(0, width - noticeOuterPadding * 2));
+  const effectiveCompactHeader = compactHeader || compactViewport;
 
   return (
-    <View style={{ flex: 1, minHeight: height, backgroundColor: Colors.bg, overflow: "hidden" }}>
+    <View
+      style={{
+        flex: 1,
+        height,
+        minHeight: height,
+        backgroundColor: Colors.bg,
+        overflow: "hidden",
+      }}
+    >
       <View
         pointerEvents="none"
         style={{
@@ -70,7 +81,7 @@ export function HostLayout({
         eyebrow={headerEyebrow}
         title={headerTitle}
         subtitle={headerSubtitle}
-        compact={compactHeader}
+        compact={effectiveCompactHeader}
       />
       {!!notice && (
         <View
@@ -78,10 +89,10 @@ export function HostLayout({
             alignSelf: "center",
             width: "100%",
             maxWidth: Math.min(noticeMaxWidth, 860),
-            marginBottom: width >= 1100 ? 12 : 10,
+            marginBottom: compactViewport ? 8 : width >= 1100 ? 12 : 10,
             marginHorizontal: noticeOuterPadding,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
+            paddingHorizontal: fluid(16, 12, 18, "width"),
+            paddingVertical: fluid(compactViewport ? 8 : 10, 7, 10, "height"),
             borderRadius: 999,
             backgroundColor: "rgba(255,255,255,0.68)",
           }}
@@ -90,7 +101,7 @@ export function HostLayout({
             style={{
               color: Colors.textOnBg,
               textAlign: "center",
-              fontSize: 14,
+              fontSize: fluid(14, 12, 14),
               fontWeight: "700",
               opacity: 0.92,
             }}

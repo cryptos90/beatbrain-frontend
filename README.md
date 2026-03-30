@@ -62,6 +62,7 @@ Notes:
 - Opening `http://localhost:8081/` now defaults to the host web app and canonicalizes to `/host/start`.
 - Player join links still use the root URL with query params, for example `http://localhost:8081/?joinCode=ABCD`.
 - Host-Web nutzt den gemeinsamen Layoutpfad `src/host/components/HostLayout.tsx` + `src/host/components/HostPage.tsx` mit dem Prinzip `center when there is space, otherwise scroll`; Mobile bleibt davon unberuehrt.
+- Host-Web-Groessen kommen host-only aus `src/host/hooks/useHostViewport.ts`, damit Header, Cards, Buttons und Typografie auf Breite und Hoehe des Browser-Viewports reagieren statt auf feste Monitor-Groessen.
 - Fuer lokale Host-Web-Checks wurden die Breakpoints `2560x1440`, `1920x1080`, `1366x768`, `1280x800`, `1024x768`, `820x600` und `390x844` als relevante Layout-Groessen festgehalten.
 
 ## Spotify redirect URI rules
