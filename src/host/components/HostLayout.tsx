@@ -1,7 +1,8 @@
 import React, { type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import { Colors } from "../../theme";
 import { HostHeader } from "./HostHeader";
+import { HostPage } from "./HostPage";
 
 type Props = {
   children: ReactNode;
@@ -22,8 +23,12 @@ export function HostLayout({
   headerSubtitle,
   compactHeader = false,
 }: Props) {
+  const { width, height } = useWindowDimensions();
+  const noticeOuterPadding = width >= 1100 ? 24 : width >= 760 ? 20 : 16;
+  const noticeMaxWidth = Math.min(maxWidth, Math.max(0, width - noticeOuterPadding * 2));
+
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.bg, overflow: "hidden" }}>
+    <View style={{ flex: 1, minHeight: height, backgroundColor: Colors.bg, overflow: "hidden" }}>
       <View
         pointerEvents="none"
         style={{
@@ -71,9 +76,10 @@ export function HostLayout({
         <View
           style={{
             alignSelf: "center",
-            maxWidth: Math.min(maxWidth, 860),
-            marginBottom: 10,
-            marginHorizontal: 24,
+            width: "100%",
+            maxWidth: Math.min(noticeMaxWidth, 860),
+            marginBottom: width >= 1100 ? 12 : 10,
+            marginHorizontal: noticeOuterPadding,
             paddingHorizontal: 16,
             paddingVertical: 10,
             borderRadius: 999,
@@ -93,9 +99,7 @@ export function HostLayout({
           </Text>
         </View>
       )}
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 22 }}>
-        <View style={{ flex: 1, width: "100%", maxWidth, alignSelf: "center" }}>{children}</View>
-      </View>
+      <HostPage maxWidth={maxWidth}>{children}</HostPage>
     </View>
   );
 }

@@ -112,8 +112,7 @@ export function HostQuizSetupScreen({
     <HostLayout maxWidth={1160} notice={notice} headerEyebrow="Playlist Auswahl">
       <View
         style={{
-          flex: 1,
-          justifyContent: "center",
+          width: "100%",
           gap: 16,
         }}
       >

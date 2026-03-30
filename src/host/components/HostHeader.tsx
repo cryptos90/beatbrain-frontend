@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Text, View, useWindowDimensions } from "react-native";
 import { Colors } from "../../theme";
 
 type Props = {
@@ -17,17 +17,36 @@ export function HostHeader({
   subtitle,
   compact = false,
 }: Props) {
+  const { width } = useWindowDimensions();
   const hasCopy = Boolean(String(title ?? "").trim() || String(subtitle ?? "").trim());
+  const horizontalPadding = width >= 1100 ? 24 : width >= 760 ? 20 : 16;
+  const logoWidth = compact
+    ? width >= 1100
+      ? 188
+      : width >= 760
+        ? 176
+        : 160
+    : width >= 1100
+      ? 236
+      : width >= 760
+        ? 210
+        : 180;
+  const logoHeight = compact ? Math.round(logoWidth * 0.4) : Math.round(logoWidth * 0.41);
+  const titleFontSize = compact ? (width >= 760 ? 28 : 24) : width >= 1100 ? 40 : width >= 760 ? 34 : 28;
+  const titleLineHeight = compact ? (width >= 760 ? 32 : 28) : width >= 1100 ? 46 : width >= 760 ? 40 : 34;
+  const subtitleFontSize = compact ? (width >= 760 ? 14 : 13) : width >= 760 ? 17 : 15;
+  const subtitleLineHeight = compact ? (width >= 760 ? 20 : 18) : width >= 760 ? 24 : 22;
+  const copyMaxWidth = Math.min(compact ? 760 : 920, Math.max(0, width - horizontalPadding * 2));
 
   return (
     <View
       style={{
-        paddingTop: compact ? 18 : 28,
-        paddingHorizontal: 24,
-        paddingBottom: compact ? 10 : 18,
+        paddingTop: compact ? (width >= 760 ? 18 : 16) : width >= 760 ? 28 : 22,
+        paddingHorizontal: horizontalPadding,
+        paddingBottom: compact ? 12 : hasCopy ? 20 : 16,
       }}
     >
-      <View style={{ alignItems: "center", gap: compact ? 10 : 14 }}>
+      <View style={{ alignItems: "center", gap: compact ? 10 : width >= 760 ? 14 : 12 }}>
         <View
           style={{
             paddingHorizontal: 12,
@@ -53,22 +72,22 @@ export function HostHeader({
           source={require("../../../assets/logo.png")}
           resizeMode="contain"
           style={{
-            width: compact ? 188 : 236,
-            height: compact ? 76 : 96,
+            width: logoWidth,
+            height: logoHeight,
             alignSelf: "center",
           }}
         />
 
         {hasCopy && (
-          <View style={{ width: "100%", maxWidth: compact ? 760 : 920, gap: 6 }}>
+          <View style={{ width: "100%", maxWidth: copyMaxWidth, gap: 6 }}>
             {!!String(title ?? "").trim() && (
               <Text
                 style={{
                   color: Colors.textOnBg,
-                  fontSize: compact ? 28 : 40,
+                  fontSize: titleFontSize,
                   fontWeight: "900",
                   textAlign: "center",
-                  lineHeight: compact ? 32 : 46,
+                  lineHeight: titleLineHeight,
                 }}
               >
                 {title}
@@ -78,9 +97,9 @@ export function HostHeader({
               <Text
                 style={{
                   color: "rgba(32,44,89,0.86)",
-                  fontSize: compact ? 14 : 17,
+                  fontSize: subtitleFontSize,
                   fontWeight: "600",
-                  lineHeight: compact ? 20 : 24,
+                  lineHeight: subtitleLineHeight,
                   textAlign: "center",
                 }}
               >

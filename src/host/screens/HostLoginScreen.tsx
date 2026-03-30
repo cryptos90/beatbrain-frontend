@@ -38,10 +38,8 @@ export function HostLoginScreen({
     >
       <View
         style={{
-          flex: 1,
-          justifyContent: "center",
+          width: "100%",
           gap: 20,
-          paddingBottom: 18,
         }}
       >
         <View style={{ flexDirection: wideLayout ? "row" : "column", gap: 20 }}>
@@ -202,7 +200,7 @@ export function HostLoginScreen({
               </View>
             )}
 
-            <View style={{ width: "100%", gap: 12 }}>
+            <View style={{ width: "100%", maxWidth: 420, alignSelf: "center", gap: 12 }}>
               <BBButton
                 title={loginLabel}
                 onPress={onLogin}

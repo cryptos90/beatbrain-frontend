@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Image, Text, View, useWindowDimensions } from "react-native";
 import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
@@ -24,6 +24,7 @@ export function HostResultsScreen({
 }: Props) {
   const { width } = useWindowDimensions();
   const wideActions = width >= 860;
+  const compactRows = width < 620;
   const sortedPlayers = [...(lobby?.players ?? [])].sort((a, b) => b.score - a.score);
 
   return (
@@ -32,10 +33,7 @@ export function HostResultsScreen({
       notice={notice}
       headerEyebrow="Results"
     >
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 24, gap: 14 }}
-      >
+      <View style={{ width: "100%", gap: 14 }}>
         <View
           style={{
             borderRadius: Radius.xl,
@@ -80,7 +78,7 @@ export function HostResultsScreen({
               borderRadius: Radius.lg,
               paddingVertical: 14,
               paddingHorizontal: 16,
-              flexDirection: "row",
+              flexDirection: compactRows ? "column" : "row",
               alignItems: "center",
               gap: 12,
             }}
@@ -90,7 +88,8 @@ export function HostResultsScreen({
                 color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
                 fontSize: 24,
                 fontWeight: "900",
-                width: 42,
+                width: compactRows ? undefined : 42,
+                textAlign: "center",
               }}
             >
               #{index + 1}
@@ -99,12 +98,18 @@ export function HostResultsScreen({
               source={{ uri: player.avatarDataUrl }}
               style={{ width: 72, height: 72, borderRadius: 36 }}
             />
-            <View style={{ flex: 1 }}>
+            <View
+              style={{
+                flex: compactRows ? undefined : 1,
+                alignItems: compactRows ? "center" : "flex-start",
+              }}
+            >
               <Text
                 style={{
                   color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
                   fontSize: 24,
                   fontWeight: "800",
+                  textAlign: compactRows ? "center" : "left",
                 }}
               >
                 {player.name}
@@ -114,6 +119,7 @@ export function HostResultsScreen({
                   color: index === 0 ? Colors.textOnNavy : Colors.textOnBg,
                   fontSize: 18,
                   fontWeight: "700",
+                  textAlign: compactRows ? "center" : "left",
                 }}
               >
                 Score: {player.score}
@@ -128,23 +134,31 @@ export function HostResultsScreen({
           </Text>
         )}
 
-        <View style={{ flexDirection: wideActions ? "row" : "column", gap: 12 }}>
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 840,
+            alignSelf: "center",
+            flexDirection: wideActions ? "row" : "column",
+            gap: 12,
+          }}
+        >
           <BBButton
             title={actionBusy ? "Bitte warten..." : "Quiz erneut spielen"}
             onPress={onRestartQuiz}
             disabled={actionBusy}
-            style={{ flex: 1, height: 62 }}
+            style={{ flex: wideActions ? 1 : undefined, height: 62 }}
             textStyle={{ fontSize: 19, fontWeight: "800" }}
           />
           <BBButton
             title={actionBusy ? "Bitte warten..." : "Zurück zur Lobby"}
             onPress={onReturnToMenu}
             disabled={actionBusy}
-            style={{ flex: 1, height: 62 }}
+            style={{ flex: wideActions ? 1 : undefined, height: 62 }}
             textStyle={{ fontSize: 19, fontWeight: "800" }}
           />
         </View>
-      </ScrollView>
+      </View>
     </HostLayout>
   );
 }

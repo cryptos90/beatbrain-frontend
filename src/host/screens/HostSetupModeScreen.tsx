@@ -32,8 +32,7 @@ export function HostSetupModeScreen({
     <HostLayout maxWidth={1080} notice={notice} headerEyebrow="Quiz Setup">
       <View
         style={{
-          flex: 1,
-          justifyContent: "center",
+          width: "100%",
           gap: 20,
         }}
       >
@@ -147,6 +146,8 @@ function ModeCard({
         paddingHorizontal: 22,
         paddingVertical: 22,
         gap: 14,
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
       <Text
@@ -159,7 +160,14 @@ function ModeCard({
       >
         {title}
       </Text>
-      <BBButton title={cta} onPress={onPress} style={{ height: 62 }} textStyle={{ fontSize: 20, fontWeight: "800" }} />
+      <View style={{ width: "100%", maxWidth: 360 }}>
+        <BBButton
+          title={cta}
+          onPress={onPress}
+          style={{ height: 62 }}
+          textStyle={{ fontSize: 20, fontWeight: "800" }}
+        />
+      </View>
     </View>
   );
 }

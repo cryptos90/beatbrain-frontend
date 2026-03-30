@@ -279,10 +279,9 @@ export function HostQuizScreen({
     <HostLayout maxWidth={1520} notice={notice} compactHeader headerEyebrow="Live Quiz">
       <View
         style={{
-          flex: 1,
+          width: "100%",
           paddingBottom: 10,
           gap: 14,
-          justifyContent: shouldCenterPrimaryStage ? "center" : "flex-start",
         }}
       >
         <View

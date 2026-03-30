@@ -50,12 +50,12 @@ export function HostLobbyScreen({
 }: Props) {
   const { width } = useWindowDimensions();
   const wideStage = width >= 1120;
-  const gridColumns = width >= 1600 ? 5 : width >= 1300 ? 4 : width >= 980 ? 3 : 2;
+  const gridColumns = width >= 1600 ? 5 : width >= 1280 ? 4 : width >= 980 ? 3 : width >= 720 ? 2 : 1;
   const hasPlayers = Boolean(lobby?.players.length);
 
   return (
     <HostLayout maxWidth={1380} notice={notice} headerEyebrow="Lobby Stage">
-      <View style={{ flex: 1, gap: 18, paddingBottom: 14 }}>
+      <View style={{ width: "100%", gap: 18 }}>
         {!lobby ? (
           <View
             style={{
@@ -88,15 +88,11 @@ export function HostLobbyScreen({
                   borderRadius: Radius.xl,
                   paddingHorizontal: 24,
                   paddingVertical: 24,
-                  gap: 18,
+                  gap: 24,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <StageInfoPill label="Session" value={lobby.joinCode} />
-                  <StageInfoPill label="Spieler" value={String(lobby.players.length)} />
-                  <StageInfoPill label="Status" value={stageStatusLabel(lobby.status)} />
-                </View>
-
                 <Text
                   style={{
                     color: Colors.textOnNavy,
@@ -104,40 +100,35 @@ export function HostLobbyScreen({
                     fontWeight: "900",
                     letterSpacing: wideStage ? 6 : 4,
                     lineHeight: wideStage ? 92 : 72,
+                    textAlign: "center",
                   }}
                 >
                   {lobby.joinCode}
                 </Text>
 
-                <View
-                  style={{
-                    flexDirection: wideStage ? "row" : "column",
-                    gap: 14,
-                    alignItems: wideStage ? "center" : "stretch",
-                  }}
-                >
-                  <View style={{ width: wideStage ? 320 : "100%" }}>
-                    <BBButton
-                      title="Spiel vorbereiten"
-                      onPress={onOpenSetup}
-                      disabled={!canOpenSetup}
-                      style={{ height: 68 }}
-                      textStyle={{ fontSize: 21, fontWeight: "900" }}
-                    />
-                  </View>
-                  <Text
+                <View style={{ width: wideStage ? 360 : "100%", maxWidth: "100%" }}>
+                  <BBButton
+                    title="Spiel vorbereiten"
+                    onPress={onOpenSetup}
+                    disabled={!canOpenSetup}
                     style={{
-                      color: "rgba(46,196,182,0.88)",
-                      fontSize: 15,
-                      lineHeight: 22,
-                      fontWeight: "700",
-                      flex: 1,
+                      height: 82,
+                      backgroundColor: Colors.white,
+                      borderWidth: 4,
+                      borderColor: "rgba(46,196,182,0.4)",
+                      shadowColor: "#000000",
+                      shadowOpacity: 0.2,
+                      shadowRadius: 16,
+                      shadowOffset: { width: 0, height: 8 },
+                      elevation: 10,
                     }}
-                  >
-                    {canOpenSetup
-                      ? "Mindestens ein Spieler ist beigetreten."
-                      : "Mindestens ein Spieler muss beitreten."}
-                  </Text>
+                    textStyle={{
+                      color: Colors.navy,
+                      fontSize: 24,
+                      fontWeight: "900",
+                      letterSpacing: 0.4,
+                    }}
+                  />
                 </View>
               </View>
 
@@ -150,6 +141,7 @@ export function HostLobbyScreen({
                   paddingVertical: 22,
                   gap: 14,
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
@@ -209,16 +201,26 @@ export function HostLobbyScreen({
 
             <View
               style={{
-                flex: 1,
                 borderRadius: Radius.xl,
                 backgroundColor: hasPlayers ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.56)",
                 paddingHorizontal: 18,
                 paddingVertical: 18,
                 gap: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "stretch",
               }}
             >
               {hasPlayers ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
+                <View
+                  style={{
+                    width: "100%",
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    marginHorizontal: -6,
+                  }}
+                >
                   {lobby.players.map((player) => (
                     <View
                       key={player.id}
@@ -235,6 +237,7 @@ export function HostLobbyScreen({
                           paddingVertical: 16,
                           paddingHorizontal: 12,
                           alignItems: "center",
+                          justifyContent: "center",
                           minHeight: 196,
                           gap: 8,
                         }}
@@ -291,6 +294,8 @@ export function HostLobbyScreen({
                     backgroundColor: "rgba(32,44,89,0.08)",
                     paddingHorizontal: 18,
                     paddingVertical: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   <Text
@@ -300,7 +305,6 @@ export function HostLobbyScreen({
                       fontWeight: "800",
                       fontSize: 17,
                       lineHeight: 24,
-                      
                     }}
                   >
                     Warte auf den ersten Spieler.
@@ -312,32 +316,5 @@ export function HostLobbyScreen({
         )}
       </View>
     </HostLayout>
-  );
-}
-
-function StageInfoPill({ label, value }: { label: string; value: string }) {
-  return (
-    <View
-      style={{
-        borderRadius: 999,
-        backgroundColor: "rgba(255,255,255,0.12)",
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        gap: 2,
-      }}
-    >
-      <Text
-        style={{
-          color: "rgba(46,196,182,0.86)",
-          fontSize: 11,
-          fontWeight: "800",
-          textTransform: "uppercase",
-          letterSpacing: 1,
-        }}
-      >
-        {label}
-      </Text>
-      <Text style={{ color: Colors.textOnNavy, fontSize: 16, fontWeight: "900" }}>{value}</Text>
-    </View>
   );
 }

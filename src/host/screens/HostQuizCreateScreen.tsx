@@ -31,8 +31,7 @@ export function HostQuizCreateScreen({
     >
       <View
         style={{
-          flex: 1,
-          justifyContent: "center",
+          width: "100%",
           gap: 18,
         }}
       >
