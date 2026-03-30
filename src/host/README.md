@@ -18,6 +18,8 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 - `center when there is space, otherwise scroll`
 - Die gemeinsame Viewport-Huelle liegt in `src/host/components/HostPage.tsx`.
 - `src/host/components/HostLayout.tsx` nutzt `HostPage` unterhalb des Host-Headers mit Logo.
+- Host/Web ist der grosse Bildschirm fuer Moderation, Session, Quiz und Results.
+- Die Mobile App bleibt der reine Player-/Antwort-Client und wird von diesem Layoutpfad nicht beruehrt.
 - Wenn der verfuegbare Platz groesser als der Screen-Content ist, wird vertikal zentriert.
 - Wenn der Content hoeher als der verfuegbare Bereich ist, startet die Seite oben und scrollt vertikal statt abgeschnitten zu werden.
 
@@ -34,8 +36,9 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 ## Responsive Hinweise
 
 - Alle Host-Screens laufen ueber `HostLayout` und damit indirekt ueber `HostPage`.
+- Host-Container bleiben ueber `maxWidth` zentriert und reagieren mit abgestuften horizontalen paddings auf Browserbreite.
 - Buttons bleiben in moderaten Breiten statt fensterbreit zu werden.
-- Mehrspaltige Bereiche fallen bei kleineren Browserbreiten auf eine Spalte zurueck.
+- Mehrspaltige Bereiche fallen je nach Breite von 3-4 Spalten ueber 2-3 Spalten bis auf 1 Spalte zurueck.
 - Diese Anpassungen sind host-only; mobile Screens und mobile Navigation bleiben unberuehrt.
 
 ## Lokal testen
@@ -43,4 +46,4 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 - `cd beatbrain-frontend`
 - `npm run start:web`
 - `http://localhost:8081/` oder `http://localhost:8081/host/start` im Browser aufrufen
-- Relevante Host-Web-Breakpoints: `1920x1080`, `1366x768`, `1024x768`, `390x844`
+- Relevante Host-Web-Breakpoints: `2560x1440`, `1920x1080`, `1366x768`, `1280x800`, `1024x768`, `820x600`, `390x844`

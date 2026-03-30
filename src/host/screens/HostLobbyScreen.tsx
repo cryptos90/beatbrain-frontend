@@ -50,7 +50,17 @@ export function HostLobbyScreen({
 }: Props) {
   const { width } = useWindowDimensions();
   const wideStage = width >= 1120;
-  const gridColumns = width >= 1600 ? 5 : width >= 1280 ? 4 : width >= 980 ? 3 : width >= 720 ? 2 : 1;
+  const gridColumns = width >= 1680 ? 5 : width >= 1320 ? 4 : width >= 980 ? 3 : width >= 640 ? 2 : 1;
+  const sessionCodeFontSize =
+    width >= 1440 ? 88 : width >= 1120 ? 80 : width >= 900 ? 68 : width >= 560 ? 56 : 44;
+  const sessionCodeLineHeight = sessionCodeFontSize + (width >= 900 ? 6 : 4);
+  const sessionCodeLetterSpacing = width >= 1120 ? 6 : width >= 900 ? 5 : width >= 560 ? 3 : 2;
+  const prepareButtonHeight = width >= 900 ? 82 : width >= 560 ? 72 : 64;
+  const prepareButtonFontSize = width >= 900 ? 24 : width >= 560 ? 22 : 19;
+  const qrSize = width >= 1280 ? 220 : width >= 900 ? 200 : width >= 560 ? 184 : 160;
+  const playerAvatarSize = width >= 900 ? 92 : width >= 560 ? 84 : 72;
+  const playerCardMinHeight = width >= 900 ? 196 : width >= 560 ? 180 : 164;
+  const playerNameFontSize = width >= 900 ? 22 : width >= 560 ? 20 : 18;
   const hasPlayers = Boolean(lobby?.players.length);
 
   return (
@@ -96,23 +106,23 @@ export function HostLobbyScreen({
                 <Text
                   style={{
                     color: Colors.textOnNavy,
-                    fontSize: wideStage ? 88 : 68,
+                    fontSize: sessionCodeFontSize,
                     fontWeight: "900",
-                    letterSpacing: wideStage ? 6 : 4,
-                    lineHeight: wideStage ? 92 : 72,
+                    letterSpacing: sessionCodeLetterSpacing,
+                    lineHeight: sessionCodeLineHeight,
                     textAlign: "center",
                   }}
                 >
                   {lobby.joinCode}
                 </Text>
 
-                <View style={{ width: wideStage ? 360 : "100%", maxWidth: "100%" }}>
+                <View style={{ width: wideStage ? 360 : "100%", maxWidth: 420 }}>
                   <BBButton
                     title="Spiel vorbereiten"
                     onPress={onOpenSetup}
                     disabled={!canOpenSetup}
                     style={{
-                      height: 82,
+                      height: prepareButtonHeight,
                       backgroundColor: Colors.white,
                       borderWidth: 4,
                       borderColor: "rgba(46,196,182,0.4)",
@@ -124,7 +134,7 @@ export function HostLobbyScreen({
                     }}
                     textStyle={{
                       color: Colors.navy,
-                      fontSize: 24,
+                      fontSize: prepareButtonFontSize,
                       fontWeight: "900",
                       letterSpacing: 0.4,
                     }}
@@ -169,7 +179,7 @@ export function HostLobbyScreen({
                       source={{
                         uri: `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(joinUrl)}`,
                       }}
-                      style={{ width: 220, height: 220, borderRadius: 16 }}
+                      style={{ width: qrSize, height: qrSize, borderRadius: 16 }}
                     />
                   </View>
                 )}
@@ -238,19 +248,23 @@ export function HostLobbyScreen({
                           paddingHorizontal: 12,
                           alignItems: "center",
                           justifyContent: "center",
-                          minHeight: 196,
+                          minHeight: playerCardMinHeight,
                           gap: 8,
                         }}
                       >
                         <Image
                           source={{ uri: player.avatarDataUrl }}
-                          style={{ width: 92, height: 92, borderRadius: 46 }}
+                          style={{
+                            width: playerAvatarSize,
+                            height: playerAvatarSize,
+                            borderRadius: playerAvatarSize / 2,
+                          }}
                         />
                         <Text
                           numberOfLines={1}
                           style={{
                             color: Colors.textOnNavy,
-                            fontSize: 22,
+                            fontSize: playerNameFontSize,
                             fontWeight: "800",
                             textAlign: "center",
                           }}

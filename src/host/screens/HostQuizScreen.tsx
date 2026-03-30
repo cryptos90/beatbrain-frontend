@@ -40,11 +40,11 @@ function normalizeAnswer(value: string | null | undefined) {
 }
 
 function playerChips(players: LobbyPlayer[], compact = false) {
-  const avatarSize = compact ? 72 : 28;
-  const chipGap = compact ? 10 : 6;
-  const chipPaddingVertical = compact ? 8 : 4;
-  const chipPaddingHorizontal = compact ? 12 : 8;
-  const labelFontSize = compact ? 18 : 13;
+  const avatarSize = compact ? 64 : 28;
+  const chipGap = compact ? 8 : 6;
+  const chipPaddingVertical = compact ? 7 : 4;
+  const chipPaddingHorizontal = compact ? 10 : 8;
+  const labelFontSize = compact ? 16 : 13;
 
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -222,12 +222,40 @@ export function HostQuizScreen({
     question && !correctAnswer && !shouldShowSongInfo && !shouldShowNextQuestionStatus,
   );
 
-  const compactAnswersLayout = viewportWidth < 920;
+  const compactAnswersLayout = viewportWidth < 760;
   const wideTopRow = viewportWidth >= 1180;
-  const songCardMaxWidth = Math.min(500, Math.max(320, Math.round(viewportWidth * 0.46)));
+  const questionFontSize = !question
+    ? viewportWidth >= 900
+      ? 34
+      : 30
+    : viewportWidth >= 1680
+      ? 56
+      : viewportWidth >= 1280
+        ? 50
+        : viewportWidth >= 980
+          ? 42
+          : viewportWidth >= 720
+            ? 36
+            : 30;
+  const questionLineHeight = questionFontSize + (viewportWidth >= 980 ? 6 : 4);
+  const timerValueFontSize =
+    viewportWidth >= 1680 ? 76 : wideTopRow ? 68 : viewportWidth >= 980 ? 58 : viewportWidth >= 720 ? 52 : 46;
+  const timerValueLineHeight = timerValueFontSize + 6;
+  const stageHorizontalPadding = viewportWidth >= 980 ? 24 : viewportWidth >= 720 ? 20 : 16;
+  const stageVerticalPadding = shouldCenterPrimaryStage
+    ? viewportWidth >= 980
+      ? 32
+      : 24
+    : viewportWidth >= 980
+      ? 22
+      : 18;
+  const songCardMaxWidth = Math.min(
+    viewportWidth >= 1180 ? 500 : 440,
+    Math.max(280, Math.round(viewportWidth * (viewportWidth >= 1180 ? 0.46 : 0.66))),
+  );
   const coverSize = Math.min(
     176,
-    Math.max(116, Math.round(Math.min(songCardMaxWidth * 0.5, viewportHeight * 0.22))),
+    Math.max(104, Math.round(Math.min(songCardMaxWidth * 0.48, viewportHeight * 0.2))),
   );
   const answerTiles = useMemo<AnswerTile[]>(() => {
     if (!correctAnswer) {
@@ -269,10 +297,21 @@ export function HostQuizScreen({
     wrongAnswerGroups,
   ]);
   const answerTileColumns =
-    answerTiles.length === 0 ? 1 : compactAnswersLayout ? 1 : Math.min(answerTiles.length, 4);
+    answerTiles.length === 0
+      ? 1
+      : viewportWidth >= 1500
+        ? Math.min(answerTiles.length, 4)
+        : viewportWidth >= 1120
+          ? Math.min(answerTiles.length, 3)
+          : viewportWidth >= 760
+            ? Math.min(answerTiles.length, 2)
+            : 1;
   const answerTileWidth = `${100 / answerTileColumns}%` as `${number}%`;
-  const answerTileGap = 12;
-  const shouldSplitRevealInfoRow = shouldShowNextQuestionStatus && shouldShowSongInfo;
+  const answerTileGap = viewportWidth >= 760 ? 12 : 10;
+  const answerTileMinHeight =
+    answerTileColumns === 1 ? (viewportWidth >= 720 ? 220 : 190) : viewportWidth >= 1120 ? 240 : 220;
+  const shouldSplitRevealInfoRow =
+    shouldShowNextQuestionStatus && shouldShowSongInfo && viewportWidth >= 1080;
 
 
   return (
@@ -288,10 +327,12 @@ export function HostQuizScreen({
           style={{
             backgroundColor: Colors.navy,
             borderRadius: Radius.xl,
-            paddingHorizontal: 24,
-            paddingVertical: shouldCenterPrimaryStage ? 32 : 22,
+            paddingHorizontal: stageHorizontalPadding,
+            paddingVertical: stageVerticalPadding,
             gap: 16,
-            minHeight: shouldCenterPrimaryStage ? Math.min(420, Math.max(260, viewportHeight * 0.32)) : undefined,
+            minHeight: shouldCenterPrimaryStage
+              ? Math.min(420, Math.max(viewportWidth >= 720 ? 260 : 220, viewportHeight * 0.32))
+              : undefined,
           }}
         >
           <View
@@ -306,10 +347,10 @@ export function HostQuizScreen({
               <Text
                 style={{
                   color: Colors.textOnNavy,
-                  fontSize: question ? (viewportWidth >= 1280 ? 52 : 42) : 34,
+                  fontSize: questionFontSize,
                   fontWeight: "900",
-                  lineHeight: question ? (viewportWidth >= 1280 ? 58 : 48) : 40,
-                  textAlign: "center"
+                  lineHeight: questionLineHeight,
+                  textAlign: "center",
                 }}
               >
                 {question ? question.questionObject.questionText : "Warte auf die erste Frage..."}
@@ -320,7 +361,7 @@ export function HostQuizScreen({
             {shouldShowTimer && (
               <View
                 style={{
-                  minWidth: wideTopRow ? 188 : undefined,
+                  minWidth: wideTopRow ? (viewportWidth >= 1680 ? 200 : 188) : undefined,
                   borderRadius: Radius.xl,
                   backgroundColor:
                     secondsLeft <= 5 ? "rgba(220,38,38,0.92)" : "rgba(255,255,255,0.12)",
@@ -344,8 +385,8 @@ export function HostQuizScreen({
                 <Text
                   style={{
                     color: Colors.textOnNavy,
-                    fontSize: wideTopRow ? 72 : 60,
-                    lineHeight: wideTopRow ? 78 : 66,
+                    fontSize: timerValueFontSize,
+                    lineHeight: timerValueLineHeight,
                     fontWeight: "900",
                   }}
                 >
@@ -457,7 +498,7 @@ export function HostQuizScreen({
                   >
                     <View
                       style={{
-                        minHeight: answerTileColumns === 1 ? 220 : 240,
+                        minHeight: answerTileMinHeight,
                         height: "100%",
                         backgroundColor: tile.kind === "correct" ? "#16a34a" : "#dc2626",
                         borderRadius: Radius.xl,
@@ -483,10 +524,10 @@ export function HostQuizScreen({
                         <Text
                           style={{
                             color: Colors.navy,
-                            fontSize: 34,
+                            fontSize: viewportWidth >= 1120 ? 34 : viewportWidth >= 760 ? 30 : 26,
                             fontWeight: "900",
                             textAlign: "center",
-                            lineHeight: 38,
+                            lineHeight: viewportWidth >= 1120 ? 38 : viewportWidth >= 760 ? 34 : 30,
                           }}
                         >
                           {tile.answer}
@@ -547,7 +588,7 @@ export function HostQuizScreen({
                     <Text
                       style={{
                         color: Colors.textOnBg,
-                        fontSize: 24,
+                        fontSize: viewportWidth >= 760 ? 24 : 20,
                         fontWeight: "900",
                         textAlign: "center",
                       }}
@@ -557,7 +598,7 @@ export function HostQuizScreen({
                     <Text
                       style={{
                         color: "rgba(32,44,89,0.88)",
-                        fontSize: 18,
+                        fontSize: viewportWidth >= 760 ? 18 : 16,
                         fontWeight: "700",
                         textAlign: "center",
                       }}
@@ -635,7 +676,7 @@ export function HostQuizScreen({
                     <Text
                       style={{
                         color: Colors.textOnNavy,
-                        fontSize: 28,
+                        fontSize: viewportWidth >= 760 ? 28 : 24,
                         fontWeight: "900",
                         textAlign: "center",
                       }}
@@ -645,7 +686,7 @@ export function HostQuizScreen({
                     <Text
                       style={{
                         color: Colors.textOnNavy,
-                        fontSize: 18,
+                        fontSize: viewportWidth >= 760 ? 18 : 16,
                         textAlign: "center",
                         opacity: 0.95,
                       }}
@@ -655,7 +696,7 @@ export function HostQuizScreen({
                     <Text
                       style={{
                         color: Colors.textOnNavy,
-                        fontSize: 16,
+                        fontSize: viewportWidth >= 760 ? 16 : 15,
                         textAlign: "center",
                         opacity: 0.9,
                       }}
