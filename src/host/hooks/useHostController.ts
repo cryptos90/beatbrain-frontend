@@ -64,6 +64,7 @@ type RouteDecision =
 
 const HOST_WEB_STATE_KEY = "beatbrain_host_web_state_v1";
 const HOST_ROUTE_BASE = "/host";
+const HOST_ROUTE_BASE_ALT = "/--/host";
 
 const MIN_QUESTION_COUNT = 10;
 const MAX_QUESTION_COUNT = 100;
@@ -81,10 +82,23 @@ function normalizePathname(pathname: string) {
   return trimmed || "/";
 }
 
-function parseHostPath(pathname: string): ParsedHostRoute {
+function resolveHostRouteBase(pathname: string) {
+  const normalized = normalizePathname(pathname).toLowerCase();
+  if (
+    normalized === HOST_ROUTE_BASE_ALT ||
+    normalized.startsWith(`${HOST_ROUTE_BASE_ALT}/`)
+  ) {
+    return HOST_ROUTE_BASE_ALT;
+  }
+  return HOST_ROUTE_BASE;
+}
+
+function parseHostPath(pathname: string, routeBase = HOST_ROUTE_BASE): ParsedHostRoute {
   const normalized = normalizePathname(pathname);
-  const relative = normalized.startsWith(HOST_ROUTE_BASE)
-    ? normalized.slice(HOST_ROUTE_BASE.length)
+  const normalizedLower = normalized.toLowerCase();
+  const normalizedRouteBase = normalizePathname(routeBase).toLowerCase();
+  const relative = normalizedLower.startsWith(normalizedRouteBase)
+    ? normalized.slice(normalizedRouteBase.length)
     : normalized;
   const segments = relative.split("/").filter(Boolean);
   const step = segments[0] ?? "";
@@ -115,26 +129,26 @@ function parseHostPath(pathname: string): ParsedHostRoute {
   return { name: "start" };
 }
 
-function buildHostPath(route: ParsedHostRoute) {
+function buildHostPath(route: ParsedHostRoute, routeBase = HOST_ROUTE_BASE) {
   if (route.name === "setup") {
-    return `${HOST_ROUTE_BASE}/setup`;
+    return `${routeBase}/setup`;
   }
   if (route.name === "chooseQuiz") {
-    return `${HOST_ROUTE_BASE}/choose-quiz`;
+    return `${routeBase}/choose-quiz`;
   }
   if (route.name === "createQuiz") {
-    return `${HOST_ROUTE_BASE}/create-quiz`;
+    return `${routeBase}/create-quiz`;
   }
   if (route.name === "session" && route.code) {
-    return `${HOST_ROUTE_BASE}/session/${encodeURIComponent(route.code)}`;
+    return `${routeBase}/session/${encodeURIComponent(route.code)}`;
   }
   if (route.name === "quiz" && route.code) {
-    return `${HOST_ROUTE_BASE}/quiz/${encodeURIComponent(route.code)}`;
+    return `${routeBase}/quiz/${encodeURIComponent(route.code)}`;
   }
   if (route.name === "results" && route.code) {
-    return `${HOST_ROUTE_BASE}/results/${encodeURIComponent(route.code)}`;
+    return `${routeBase}/results/${encodeURIComponent(route.code)}`;
   }
-  return `${HOST_ROUTE_BASE}/start`;
+  return `${routeBase}/start`;
 }
 
 function screenForRouteName(name: HostRouteName): HostScreen {
@@ -411,7 +425,8 @@ export function useHostController() {
       }
 
       const route = routeForScreen(nextScreen, joinCode);
-      const nextPath = buildHostPath(route);
+      const routeBase = resolveHostRouteBase(window.location.pathname);
+      const nextPath = buildHostPath(route, routeBase);
       if (window.location.pathname === nextPath) {
         return;
       }
@@ -563,8 +578,9 @@ export function useHostController() {
       return;
     }
 
-    const parsed = parseHostPath(window.location.pathname);
-    const canonicalPath = buildHostPath(parsed);
+    const routeBase = resolveHostRouteBase(window.location.pathname);
+    const parsed = parseHostPath(window.location.pathname, routeBase);
+    const canonicalPath = buildHostPath(parsed, routeBase);
     if (window.location.pathname !== canonicalPath) {
       const nextUrl = `${canonicalPath}${window.location.search}${window.location.hash}`;
       window.history.replaceState({}, document.title, nextUrl);
@@ -581,7 +597,7 @@ export function useHostController() {
         setPreferredLobbyScreen(decision.preferredLobbyScreen);
       }
 
-      const nextPath = buildHostPath(decision.route);
+      const nextPath = buildHostPath(decision.route, routeBase);
       if (window.location.pathname !== nextPath) {
         window.history.replaceState({}, document.title, nextPath);
       }
@@ -722,7 +738,8 @@ export function useHostController() {
     setAuthBusy(true);
     setAuthError(null);
     try {
-      const redirectOrigin = `${window.location.origin}/host/start`;
+      const routeBase = resolveHostRouteBase(window.location.pathname);
+      const redirectOrigin = `${window.location.origin}${routeBase}/start`;
       const response = await startSpotifyAuth("web", { redirectOrigin });
       const authorizeUrl =
         typeof response.authorizeUrl === "string" ? response.authorizeUrl : "";
@@ -1004,10 +1021,11 @@ export function useHostController() {
     void consume().finally(() => {
       currentUrl.searchParams.delete("auth_code");
       currentUrl.searchParams.delete("error");
-      const parsed = parseHostPath(currentUrl.pathname);
-      const nextPath = buildHostPath(parsed);
+      const routeBase = resolveHostRouteBase(currentUrl.pathname);
+      const parsed = parseHostPath(currentUrl.pathname, routeBase);
+      const nextPath = buildHostPath(parsed, routeBase);
       const nextUrl = `${nextPath}${currentUrl.search}${currentUrl.hash}`;
-      window.history.replaceState({}, document.title, nextUrl || "/host/start");
+      window.history.replaceState({}, document.title, nextUrl || `${routeBase}/start`);
     });
   }, []);
 
