@@ -9,7 +9,7 @@ import {
   QUIZ_LOGO_WIDTH,
 } from "../../constants/app";
 import { Colors, Radius } from "../../theme";
-import type { LobbyState, QuizQuestion } from "../../shared/types/app";
+import type { LobbyState, QuizQuestion, QuizQuestionOption } from "../../shared/types/app";
 
 type Props = {
   lobby: LobbyState | null;
@@ -45,15 +45,31 @@ export function MultiplayerQuizView({
   }, [question?.correctSongId]);
 
   const optionRows = question
-    ? question.options.length <= 2
-      ? [question.options]
-      : [question.options.slice(0, 2), question.options.slice(2, 4)]
+    ? (() => {
+        const optionDetailsByValue = new Map(
+          (question.optionDetails ?? []).map((option) => [option.value, option]),
+        );
+        const orderedOptions: QuizQuestionOption[] = question.options.map((value) => {
+          const existing = optionDetailsByValue.get(value);
+          if (existing) {
+            return existing;
+          }
+          return {
+            value,
+            label: value,
+          };
+        });
+        return orderedOptions.length <= 2
+          ? [orderedOptions]
+          : [orderedOptions.slice(0, 2), orderedOptions.slice(2, 4)];
+      })()
     : [];
   const isYearInputQuestion = Boolean(
     question &&
       (question.questionObject.format === "year_input" ||
         question.questionObject.answerType === "year-input"),
   );
+  const isCoverOptionsQuestion = question?.questionObject.format === "cover_options";
   const isAnswerLocked = playerAnswered || Boolean(correctAnswer);
   const canSubmitYearInput = !isAnswerLocked && yearInput.trim().length > 0;
 
@@ -154,6 +170,69 @@ export function MultiplayerQuizView({
                   disabled={!canSubmitYearInput}
                 />
               </View>
+            ) : isCoverOptionsQuestion ? (
+              <View style={{ gap: 12 }}>
+                {optionRows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={{ flexDirection: "row", gap: 12 }}>
+                    {row.map((option) => {
+                      const disabled = playerAnswered || Boolean(correctAnswer);
+                      const isReveal = Boolean(correctAnswer);
+                      const optionBackgroundColor = !isReveal
+                        ? Colors.navy
+                        : option.value === correctAnswer
+                          ? "#16a34a"
+                          : "#dc2626";
+                      return (
+                        <Pressable
+                          key={option.value}
+                          onPress={() => onAnswer(option.value)}
+                          disabled={disabled}
+                          style={{
+                            flex: 1,
+                            minHeight: 170,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: optionBackgroundColor,
+                            borderRadius: Radius.xl,
+                            padding: 10,
+                            opacity: isReveal ? 1 : disabled ? 0.86 : 1,
+                            gap: 8,
+                          }}
+                        >
+                          {!!option.coverUrl ? (
+                            <Image
+                              source={{ uri: option.coverUrl }}
+                              style={{ width: "100%", aspectRatio: 1, borderRadius: 12 }}
+                            />
+                          ) : (
+                            <View
+                              style={{
+                                width: "100%",
+                                aspectRatio: 1,
+                                borderRadius: 12,
+                                backgroundColor: "rgba(255,255,255,0.14)",
+                              }}
+                            />
+                          )}
+                          {isReveal && (
+                            <Text
+                              style={{
+                                color: Colors.textOnNavy,
+                                fontSize: 14,
+                                fontWeight: "700",
+                                textAlign: "center",
+                              }}
+                            >
+                              {option.label}
+                            </Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                    {row.length < 2 && <View style={{ flex: 1 }} />}
+                  </View>
+                ))}
+              </View>
             ) : (
               <View style={{ gap: 12 }}>
                 {optionRows.map((row, rowIndex) => (
@@ -163,13 +242,13 @@ export function MultiplayerQuizView({
                       const isReveal = Boolean(correctAnswer);
                       const optionBackgroundColor = !isReveal
                         ? Colors.navy
-                        : option === correctAnswer
+                        : option.value === correctAnswer
                           ? "#16a34a"
                           : "#dc2626";
                       return (
                         <Pressable
-                          key={option}
-                          onPress={() => onAnswer(option)}
+                          key={option.value}
+                          onPress={() => onAnswer(option.value)}
                           disabled={disabled}
                           style={{
                             flex: 1,
@@ -190,7 +269,7 @@ export function MultiplayerQuizView({
                               textAlign: "center",
                             }}
                           >
-                            {option}
+                            {option.label}
                           </Text>
                         </Pressable>
                       );

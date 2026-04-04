@@ -62,6 +62,7 @@ export function AppRouter({ app }: Props) {
           isStartingQuiz={app.isStartingQuiz}
           selectedPlaylistIndex={app.selectedPlaylistIndex}
           selectedPlaylist={app.selectedPlaylist}
+          startDisabledReason={app.chooseStartDisabledReason}
           carouselRef={app.carouselRef}
           playlistError={app.playlistError}
           reauthRequired={app.reauthRequired}
@@ -80,6 +81,8 @@ export function AppRouter({ app }: Props) {
               app.selectedPlaylist.id,
               app.selectedPlaylist.title,
               app.selectedPlaylist.decadeTag,
+              undefined,
+              app.selectedPlaylist.trackCount,
             );
           }}
         />

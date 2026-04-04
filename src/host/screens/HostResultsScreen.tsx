@@ -1,8 +1,8 @@
 import React from "react";
 import { Image, Text, View } from "react-native";
-import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { HostActionButton } from "../components/HostActionButton";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
@@ -23,8 +23,8 @@ export function HostResultsScreen({
   onReturnToMenu,
   notice,
 }: Props) {
-  const { width, fluid } = useHostViewport();
-  const wideActions = width >= 860;
+  const { width, fluid, isShortHeight } = useHostViewport();
+  const wideActions = width >= 960 && !isShortHeight;
   const compactRows = width < 620;
   const avatarSize = fluid(72, 58, 72);
   const sortedPlayers = [...(lobby?.players ?? [])].sort((a, b) => b.score - a.score);
@@ -145,18 +145,18 @@ export function HostResultsScreen({
             gap: fluid(12, 10, 12, "height"),
           }}
         >
-          <BBButton
+          <HostActionButton
             title={actionBusy ? "Bitte warten..." : "Quiz erneut spielen"}
             onPress={onRestartQuiz}
             disabled={actionBusy}
-            style={{ flex: wideActions ? 1 : undefined, height: fluid(62, 54, 62, "height") }}
+            style={{ flex: wideActions ? 1 : undefined }}
             textStyle={{ fontSize: fluid(19, 17, 19), fontWeight: "800" }}
           />
-          <BBButton
+          <HostActionButton
             title={actionBusy ? "Bitte warten..." : "Zurück zur Lobby"}
             onPress={onReturnToMenu}
             disabled={actionBusy}
-            style={{ flex: wideActions ? 1 : undefined, height: fluid(62, 54, 62, "height") }}
+            style={{ flex: wideActions ? 1 : undefined }}
             textStyle={{ fontSize: fluid(19, 17, 19), fontWeight: "800" }}
           />
         </View>

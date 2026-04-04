@@ -78,12 +78,21 @@ if /I "%MODE%"=="lan" (
   exit /b !EXITCODE!
 )
 
-echo [INFO] Trying TUNNEL...
-call npx expo start --tunnel --port 8081 --clear
-if errorlevel 1 (
-  echo [WARN] Tunnel failed ^(ngrok^). Falling back to LAN...
-  call npx expo start --lan --port 8081 --clear
+if /I "%MODE%"=="tunnel" (
+  echo [INFO] Starting Expo in TUNNEL mode...
+  call npx expo start --tunnel --port 8081 --clear
+  if errorlevel 1 (
+    echo [WARN] Tunnel failed ^(ngrok^). Falling back to LAN...
+    call npx expo start --lan --port 8081 --clear
+  )
+  set "EXITCODE=!errorlevel!"
+  echo [INFO] Expo exited with code !EXITCODE!
+  pause
+  exit /b !EXITCODE!
 )
+
+echo [INFO] Starting Expo in default LAN mode...
+call npx expo start --lan --port 8081 --clear
 
 set "EXITCODE=!errorlevel!"
 echo [INFO] Expo exited with code !EXITCODE!

@@ -1,9 +1,9 @@
 import React from "react";
 import { HostLobbyScreen } from "./screens/HostLobbyScreen";
 import { HostLoginScreen } from "./screens/HostLoginScreen";
+import { HostChoosePlaylistScreen } from "./screens/HostChoosePlaylistScreen";
 import { HostQuizCreateScreen } from "./screens/HostQuizCreateScreen";
 import { HostQuizScreen } from "./screens/HostQuizScreen";
-import { HostQuizSetupScreen } from "./screens/HostQuizSetupScreen";
 import { HostSetupModeScreen } from "./screens/HostSetupModeScreen";
 import { HostResultsScreen } from "./screens/HostResultsScreen";
 import { useHostController } from "./hooks/useHostController";
@@ -53,10 +53,13 @@ export function HostApp() {
 
   if (app.screen === "setupChoose") {
     return (
-      <HostQuizSetupScreen
+      <HostChoosePlaylistScreen
         playlists={app.playlists}
+        loading={app.playlistsLoading}
+        playlistsError={app.playlistsError}
         selectedPlaylistIndex={app.selectedPlaylistIndex}
         setupError={app.setupError}
+        startDisabledReason={app.chooseStartDisabledReason}
         creatingSession={app.creatingSession}
         onSelectPlaylistIndex={app.setSelectedPlaylistIndex}
         onCreateSession={app.createSessionFromChoose}

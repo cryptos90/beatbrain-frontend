@@ -4,23 +4,36 @@ export type PlaylistCard = {
   imageUrl: string;
   tags?: string[];
   decadeTag?: string;
+  categoryType?: "decade" | "genre";
+  trackCount?: number;
 };
 
 export type ChoosePlaylist = {
   id: string;
   name: string;
   coverUrl: string;
+  tags?: string[];
+  decadeTag?: string;
+  categoryType?: "decade" | "genre";
+  trackCount?: number;
 };
 
 export type QuestionObject = {
   questionText: string;
   answerFieldPath: string;
   answerType: "multiple-choice" | "binary" | "year-input";
-  format?: "options" | "year_input";
+  format?: "options" | "year_input" | "cover_options";
   payload?: {
     toleranceYears?: number;
     correctYear?: number;
   };
+};
+
+export type QuizQuestionOption = {
+  value: string;
+  label: string;
+  coverUrl?: string;
+  subtitle?: string;
 };
 
 export type QuizQuestion = {
@@ -30,6 +43,7 @@ export type QuizQuestion = {
   correctAnswer: string;
   wrongAnswers: string[];
   options: string[];
+  optionDetails?: QuizQuestionOption[];
   trackInfo: {
     id: string;
     uri?: string;

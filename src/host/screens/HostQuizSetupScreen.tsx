@@ -1,6 +1,9 @@
+export { HostChoosePlaylistScreen as HostQuizSetupScreen } from "./HostChoosePlaylistScreen";
+/*
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
+  ActivityIndicator,
   Image,
   Platform,
   Pressable,
@@ -13,11 +16,14 @@ import { BBButton } from "../../components/BBButton";
 import { CARD_W } from "../../constants/app";
 import { Colors, Radius } from "../../theme";
 import type { PlaylistCard } from "../../shared/types/app";
+import { HostActionButton } from "../components/HostActionButton";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
 type Props = {
   playlists: PlaylistCard[];
+  loading: boolean;
+  playlistsError: string | null;
   selectedPlaylistIndex: number;
   setupError: string | null;
   creatingSession: boolean;
@@ -28,6 +34,8 @@ type Props = {
 
 export function HostQuizSetupScreen({
   playlists,
+  loading,
+  playlistsError,
   selectedPlaylistIndex,
   setupError,
   creatingSession,
@@ -35,80 +43,14 @@ export function HostQuizSetupScreen({
   onCreateSession,
   notice,
 }: Props) {
-  const { fluid } = useHostViewport();
-  const scrollRef = useRef<ScrollView | null>(null);
-  const [carouselWidth, setCarouselWidth] = useState(Math.max(680, CARD_W * 2.8));
-  const itemSpacing = 14;
-  const cardWidth = useMemo(() => {
-    const visibleWithHalfSides = (carouselWidth - itemSpacing * 4) / 4;
-    return Math.max(124, Math.min(280, visibleWithHalfSides));
-  }, [carouselWidth]);
-  const itemWidth = cardWidth + itemSpacing;
-  const sideInset = Math.max(0, (carouselWidth - cardWidth) / 2);
-  const hasPlaylists = playlists.length > 0;
+  const { width, fluid, isShortHeight } = useHostViewport();
+  const columns =
+    width >= 1500 && !isShortHeight ? 4 : width >= 1160 ? 3 : width >= 760 ? 2 : 1;
+  const cardWidth =
+    columns === 1 ? "100%" : columns === 2 ? "50%" : columns === 3 ? "33.333%" : "25%";
+  const cardGap = fluid(16, 10, 18, "height");
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
-
-  const onCarouselLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const nextWidth = Math.max(320, event.nativeEvent.layout.width);
-      if (Math.abs(nextWidth - carouselWidth) > 2) {
-        setCarouselWidth(nextWidth);
-      }
-    },
-    [carouselWidth],
-  );
-
-  const selectIndex = useCallback(
-    (index: number) => {
-      if (!playlists.length) {
-        return;
-      }
-      const safeIndex = Math.max(0, Math.min(index, playlists.length - 1));
-      onSelectPlaylistIndex(safeIndex);
-      scrollRef.current?.scrollTo({
-        x: Math.max(0, safeIndex * itemWidth),
-        animated: true,
-      });
-    },
-    [itemWidth, onSelectPlaylistIndex, playlists.length],
-  );
-
-  const selectPrev = useCallback(() => {
-    selectIndex(selectedPlaylistIndex - 1);
-  }, [selectIndex, selectedPlaylistIndex]);
-
-  const selectNext = useCallback(() => {
-    selectIndex(selectedPlaylistIndex + 1);
-  }, [selectIndex, selectedPlaylistIndex]);
-
-  useEffect(() => {
-    if (!hasPlaylists) {
-      return;
-    }
-    scrollRef.current?.scrollTo({
-      x: Math.max(0, selectedPlaylistIndex * itemWidth),
-      animated: false,
-    });
-  }, [hasPlaylists, itemWidth, selectedPlaylistIndex]);
-
-  useEffect(() => {
-    if (Platform.OS !== "web") {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        selectPrev();
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        selectNext();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectNext, selectPrev]);
+  const disableStart = creatingSession || loading || !selectedPlaylist;
 
   return (
     <HostLayout maxWidth={1160} notice={notice} headerEyebrow="Playlist Auswahl">
@@ -338,3 +280,4 @@ function ArrowButton({ direction, disabled, onPress }: ArrowButtonProps) {
     </Pressable>
   );
 }
+*/

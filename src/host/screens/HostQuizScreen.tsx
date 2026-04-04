@@ -1,7 +1,12 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Text, View } from "react-native";
 import { Colors, Radius } from "../../theme";
-import type { LobbyPlayer, LobbyState, QuizQuestion } from "../../shared/types/app";
+import type {
+  LobbyPlayer,
+  LobbyState,
+  QuizQuestion,
+  QuizQuestionOption,
+} from "../../shared/types/app";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
@@ -30,9 +35,11 @@ type AnswerTile = {
   id: string;
   label: string;
   answer: string;
+  answerDisplay: string;
   players: LobbyPlayer[];
   kind: "correct" | "wrong";
   subtitle?: string | null;
+  coverUrl?: string;
   emptyMessage?: string | null;
 };
 
@@ -40,12 +47,30 @@ function normalizeAnswer(value: string | null | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function playerChips(players: LobbyPlayer[], compact = false) {
-  const avatarSize = compact ? 64 : 28;
-  const chipGap = compact ? 8 : 6;
-  const chipPaddingVertical = compact ? 7 : 4;
-  const chipPaddingHorizontal = compact ? 10 : 8;
-  const labelFontSize = compact ? 16 : 13;
+function resolveQuestionOption(
+  question: QuizQuestion | null,
+  answerValue: string | null | undefined,
+): QuizQuestionOption | null {
+  if (!question) {
+    return null;
+  }
+
+  const normalizedAnswerValue = String(answerValue ?? "").trim();
+  if (!normalizedAnswerValue) {
+    return null;
+  }
+
+  return (
+    question.optionDetails?.find((option) => option.value === normalizedAnswerValue) ?? null
+  );
+}
+
+function playerChips(players: LobbyPlayer[], compact = false, dense = false) {
+  const avatarSize = compact ? (dense ? 44 : 64) : 28;
+  const chipGap = compact ? (dense ? 6 : 8) : 6;
+  const chipPaddingVertical = compact ? (dense ? 5 : 7) : 4;
+  const chipPaddingHorizontal = compact ? (dense ? 8 : 10) : 8;
+  const labelFontSize = compact ? (dense ? 13 : 16) : 13;
 
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -72,7 +97,7 @@ function playerChips(players: LobbyPlayer[], compact = false) {
           />
           <Text
             style={{
-              color: Colors.textOnNavy,
+              color: Colors.navy,
               fontSize: labelFontSize,
               fontWeight: "700",
             }}
@@ -100,7 +125,7 @@ export function HostQuizScreen({
   totalPlayers,
   notice,
 }: Props) {
-  const { width: viewportWidth, height: viewportHeight, fluid } = useHostViewport();
+  const { width: viewportWidth, height: viewportHeight, fluid, isShortHeight } = useHostViewport();
   const players = lobby?.players ?? [];
   const answeredCount = players.filter((player) => player.answered).length;
   const openCount = Math.max(0, totalPlayers - answeredCount);
@@ -146,6 +171,24 @@ export function HostQuizScreen({
     }
 
     return normalizeAnswer(normalized) === normalizeAnswer(correctAnswer);
+  };
+
+  const resolveAnswerDisplay = (answerValue: string | null | undefined) => {
+    const option = resolveQuestionOption(question, answerValue);
+    if (option) {
+      return {
+        label: option.label,
+        subtitle: option.subtitle ?? null,
+        coverUrl: option.coverUrl,
+      };
+    }
+
+    const fallbackLabel = String(answerValue ?? "").trim();
+    return {
+      label: fallbackLabel,
+      subtitle: null,
+      coverUrl: undefined,
+    };
   };
 
   const correctPlayers = useMemo(
@@ -223,8 +266,8 @@ export function HostQuizScreen({
     question && !correctAnswer && !shouldShowSongInfo && !shouldShowNextQuestionStatus,
   );
 
-  const compactAnswersLayout = viewportWidth < 760;
-  const wideTopRow = viewportWidth >= 1180;
+  const compactAnswersLayout = viewportWidth < 820 || isShortHeight;
+  const wideTopRow = viewportWidth >= 1180 && !isShortHeight;
   const questionFontSize = question ? fluid(48, 28, 56) : fluid(32, 24, 34);
   const questionLineHeight = questionFontSize + fluid(question ? 6 : 5, 4, 7, "height");
   const timerValueFontSize = fluid(wideTopRow ? 68 : 58, 40, 76);
@@ -246,28 +289,36 @@ export function HostQuizScreen({
       return [];
     }
 
+    const correctDisplay = resolveAnswerDisplay(correctAnswer);
+
     const tiles: AnswerTile[] = [
       {
         id: "correct",
         label: "Korrekte Antwort",
         answer: correctAnswer,
+        answerDisplay: correctDisplay.label,
         players: correctPlayers,
         kind: "correct",
         subtitle:
           isYearInputQuestion && Number.isFinite(correctYear)
             ? `Toleranz: ${correctYear - toleranceYears} bis ${correctYear + toleranceYears}`
-            : null,
+            : correctDisplay.subtitle,
+        ...(correctDisplay.coverUrl ? { coverUrl: correctDisplay.coverUrl } : {}),
         emptyMessage: "Niemand hat korrekt geantwortet.",
       },
     ];
 
     for (const group of wrongAnswerGroups) {
+      const wrongDisplay = resolveAnswerDisplay(group.answer);
       tiles.push({
         id: `wrong-${normalizeAnswer(group.answer)}`,
         label: "Falsche Antwort",
         answer: group.answer,
+        answerDisplay: wrongDisplay.label,
         players: group.players,
         kind: "wrong",
+        subtitle: wrongDisplay.subtitle,
+        ...(wrongDisplay.coverUrl ? { coverUrl: wrongDisplay.coverUrl } : {}),
       });
     }
 
@@ -277,27 +328,43 @@ export function HostQuizScreen({
     correctPlayers,
     correctYear,
     isYearInputQuestion,
+    question,
     toleranceYears,
     wrongAnswerGroups,
   ]);
   const answerTileColumns =
     answerTiles.length === 0
       ? 1
-      : viewportWidth >= 1500
+      : answerTiles.length > 4
+        ? answerTiles.length
+      : viewportWidth >= 1500 && !isShortHeight
         ? Math.min(answerTiles.length, 4)
-        : viewportWidth >= 1120
+        : viewportWidth >= 1120 && !isShortHeight
           ? Math.min(answerTiles.length, 3)
           : viewportWidth >= 760
             ? Math.min(answerTiles.length, 2)
             : 1;
+  const denseAnswerTiles = answerTileColumns > 4;
   const answerTileWidth = `${100 / answerTileColumns}%` as `${number}%`;
-  const answerTileGap = viewportWidth >= 760 ? 12 : 10;
+  const answerTileGap = denseAnswerTiles ? 8 : viewportWidth >= 760 ? 12 : 10;
   const answerTileMinHeight =
-    answerTileColumns === 1
+    denseAnswerTiles
+      ? fluid(176, 148, 184, "height")
+      : answerTileColumns === 1
       ? fluid(210, 176, 220, "height")
       : fluid(viewportWidth >= 1120 ? 240 : 220, 190, 240, "height");
+  const answerTileHeadingFontSize = denseAnswerTiles ? 13 : 16;
+  const answerTileValueFontSize = denseAnswerTiles
+    ? fluid(22, 16, 24)
+    : viewportWidth >= 1120
+      ? 34
+      : viewportWidth >= 760
+        ? 30
+        : 26;
+  const answerTileValueLineHeight = answerTileValueFontSize + (denseAnswerTiles ? 3 : 4);
+  const answerTileSubtitleFontSize = denseAnswerTiles ? 12 : 15;
   const shouldSplitRevealInfoRow =
-    shouldShowNextQuestionStatus && shouldShowSongInfo && viewportWidth >= 1080;
+    shouldShowNextQuestionStatus && shouldShowSongInfo && viewportWidth >= 1160 && !isShortHeight;
 
 
   return (
@@ -317,7 +384,7 @@ export function HostQuizScreen({
             paddingVertical: stageVerticalPadding,
             gap: 16,
             minHeight: shouldCenterPrimaryStage
-              ? Math.min(420, Math.max(viewportWidth >= 720 ? 260 : 220, viewportHeight * 0.32))
+              ? Math.min(380, Math.max(viewportWidth >= 720 ? 240 : 210, viewportHeight * 0.28))
               : undefined,
           }}
         >
@@ -347,12 +414,14 @@ export function HostQuizScreen({
             {shouldShowTimer && (
               <View
                 style={{
-                  minWidth: wideTopRow ? (viewportWidth >= 1680 ? 200 : 188) : undefined,
+                  width: wideTopRow ? undefined : "100%",
+                  maxWidth: wideTopRow ? 220 : 320,
+                  alignSelf: wideTopRow ? "auto" : "center",
                   borderRadius: Radius.xl,
                   backgroundColor:
                     secondsLeft <= 5 ? "rgba(220,38,38,0.92)" : "rgba(255,255,255,0.12)",
-                  paddingHorizontal: 18,
-                  paddingVertical: 16,
+                  paddingHorizontal: fluid(18, 14, 20),
+                  paddingVertical: fluid(16, 12, 18, "height"),
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -469,7 +538,7 @@ export function HostQuizScreen({
               <View
                 style={{
                   flexDirection: "row",
-                  flexWrap: "wrap",
+                  flexWrap: denseAnswerTiles ? "nowrap" : "wrap",
                   marginHorizontal: compactAnswersLayout ? 0 : -(answerTileGap / 2),
                 }}
               >
@@ -488,9 +557,9 @@ export function HostQuizScreen({
                         height: "100%",
                         backgroundColor: tile.kind === "correct" ? "#16a34a" : "#dc2626",
                         borderRadius: Radius.xl,
-                        paddingVertical: 18,
-                        paddingHorizontal: 16,
-                        gap: 12,
+                        paddingVertical: denseAnswerTiles ? 12 : 18,
+                        paddingHorizontal: denseAnswerTiles ? 10 : 16,
+                        gap: denseAnswerTiles ? 10 : 12,
                         justifyContent: "space-between",
                       }}
                     >
@@ -498,7 +567,7 @@ export function HostQuizScreen({
                         <Text
                           style={{
                             color: Colors.navy,
-                            fontSize: 16,
+                            fontSize: answerTileHeadingFontSize,
                             fontWeight: "900",
                             textAlign: "center",
                             letterSpacing: 1,
@@ -507,22 +576,38 @@ export function HostQuizScreen({
                         >
                           {tile.label}
                         </Text>
+                        {!!tile.coverUrl && (
+                          <Image
+                            source={{ uri: tile.coverUrl }}
+                            resizeMode="cover"
+                            style={{
+                              width: denseAnswerTiles
+                                ? Math.min(92, Math.max(62, answerTileMinHeight * 0.36))
+                                : Math.min(160, Math.max(110, answerTileMinHeight * 0.48)),
+                              height: denseAnswerTiles
+                                ? Math.min(92, Math.max(62, answerTileMinHeight * 0.36))
+                                : Math.min(160, Math.max(110, answerTileMinHeight * 0.48)),
+                              borderRadius: 16,
+                              alignSelf: "center",
+                            }}
+                          />
+                        )}
                         <Text
                           style={{
                             color: Colors.navy,
-                            fontSize: viewportWidth >= 1120 ? 34 : viewportWidth >= 760 ? 30 : 26,
+                            fontSize: answerTileValueFontSize,
                             fontWeight: "900",
                             textAlign: "center",
-                            lineHeight: viewportWidth >= 1120 ? 38 : viewportWidth >= 760 ? 34 : 30,
+                            lineHeight: answerTileValueLineHeight,
                           }}
                         >
-                          {tile.answer}
+                          {tile.answerDisplay}
                         </Text>
                         {!!tile.subtitle && (
                           <Text
                             style={{
                               color: Colors.navy,
-                              fontSize: 15,
+                              fontSize: answerTileSubtitleFontSize,
                               textAlign: "center",
                               opacity: 0.92,
                             }}
@@ -533,13 +618,13 @@ export function HostQuizScreen({
                       </View>
 
                       {tile.players.length > 0 ? (
-                        playerChips(tile.players, true)
+                        playerChips(tile.players, true, denseAnswerTiles)
                       ) : !!tile.emptyMessage ? (
                         <Text
                           style={{
                             color: Colors.navy,
                             textAlign: "center",
-                            fontSize: 15,
+                            fontSize: answerTileSubtitleFontSize,
                             fontWeight: "700",
                           }}
                         >

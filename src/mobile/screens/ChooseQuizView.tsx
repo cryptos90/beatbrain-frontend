@@ -14,6 +14,7 @@ type Props = {
   isStartingQuiz?: boolean;
   selectedPlaylistIndex: number;
   selectedPlaylist: PlaylistCard | null;
+  startDisabledReason?: string | null;
   carouselRef: RefObject<FlatList<PlaylistCard> | null>;
   playlistError: string | null;
   reauthRequired?: boolean;
@@ -32,6 +33,7 @@ export function ChooseQuizView({
   isStartingQuiz = false,
   selectedPlaylistIndex,
   selectedPlaylist,
+  startDisabledReason = null,
   carouselRef,
   playlistError,
   reauthRequired = false,
@@ -43,7 +45,8 @@ export function ChooseQuizView({
   onRelogin,
   onRetry,
 }: Props) {
-  const disableStart = loading || isStartingQuiz || !selectedPlaylist;
+  const disableStart =
+    loading || isStartingQuiz || !selectedPlaylist || Boolean(startDisabledReason);
   const isErrorMode = viewMode === "error";
   const errorTitle = reauthRequired
     ? "Spotify Login erneuern erforderlich"
@@ -67,7 +70,7 @@ export function ChooseQuizView({
                 color: Colors.textOnBg,
               }}
             >
-              Playlists werden geladen...
+              BeatBrain-Playlists werden geladen...
             </Text>
           </View>
         ) : isErrorMode ? (
@@ -188,6 +191,19 @@ export function ChooseQuizView({
               paddingBottom: CHOOSE_FOOTER_PADDING_BOTTOM,
             }}
           >
+            {!!startDisabledReason && (
+              <Text
+                style={{
+                  marginBottom: 10,
+                  textAlign: "center",
+                  color: Colors.textOnBg,
+                  opacity: 0.86,
+                  fontWeight: "700",
+                }}
+              >
+                {startDisabledReason}
+              </Text>
+            )}
             <BBButton title="Start Quiz" disabled={disableStart} onPress={onStartQuiz} />
           </View>
         )}

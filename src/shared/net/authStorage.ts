@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { sanitizeStoredHostJwt } from "./hostJwt";
 
 export const HOST_JWT_STORAGE_KEY = "beatbrain_host_jwt";
 
@@ -27,23 +28,31 @@ function resolveAsyncStorage(): AsyncStorageLike | null {
 
 export async function getStoredHostJwt(): Promise<string | null> {
   try {
+    let rawJwt: string | null = null;
+
     if (Platform.OS === "web") {
-      return window.localStorage.getItem(HOST_JWT_STORAGE_KEY);
+      rawJwt = window.localStorage.getItem(HOST_JWT_STORAGE_KEY);
+    } else {
+      const secure = await SecureStore.getItemAsync(HOST_JWT_STORAGE_KEY);
+      if (secure) {
+        rawJwt = secure;
+      } else {
+        const asyncStorage = resolveAsyncStorage();
+        if (asyncStorage) {
+          rawJwt = await asyncStorage.getItem(HOST_JWT_STORAGE_KEY);
+        }
+      }
     }
 
-    const secure = await SecureStore.getItemAsync(HOST_JWT_STORAGE_KEY);
-    if (secure) {
-      return secure;
+    const sanitizedJwt = sanitizeStoredHostJwt(rawJwt);
+    if (rawJwt && !sanitizedJwt) {
+      await setStoredHostJwt(null);
     }
 
-    const asyncStorage = resolveAsyncStorage();
-    if (asyncStorage) {
-      return await asyncStorage.getItem(HOST_JWT_STORAGE_KEY);
-    }
+    return sanitizedJwt;
   } catch {
     return null;
   }
-  return null;
 }
 
 export async function setStoredHostJwt(jwt: string | null): Promise<void> {
@@ -75,4 +84,3 @@ export async function setStoredHostJwt(jwt: string | null): Promise<void> {
     // Intentionally ignore storage errors to keep runtime flow alive.
   }
 }
-

@@ -1,7 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
+import { HostActionButton } from "../components/HostActionButton";
 import { HostLayout } from "../components/HostLayout";
 import { useHostViewport } from "../hooks/useHostViewport";
 
@@ -26,20 +26,21 @@ export function HostLoginScreen({
   onStartSession,
   notice,
 }: Props) {
-  const { width, height, fluid, isShortViewport } = useHostViewport();
-  const compactViewport = isShortViewport;
-  const wideLayout = width >= 1080 && height >= 620;
+  const { width, fluid, isShortHeight, canUseWideSplit } = useHostViewport();
+  const compactViewport = isShortHeight;
+  const wideLayout = canUseWideSplit;
   const sectionGap = fluid(20, 12, 20, "height");
   const compactCardPadding = fluid(compactViewport ? 20 : 24, 18, 26);
   const leftCardPaddingX = fluid(compactViewport ? 22 : 28, 18, 28);
   const leftCardPaddingY = fluid(compactViewport ? 20 : 28, 18, 28, "height");
-  const panelTitleSize = wideLayout ? fluid(compactViewport ? 30 : 34, 24, 34) : fluid(compactViewport ? 28 : 30, 24, 30);
+  const panelTitleSize = wideLayout
+    ? fluid(compactViewport ? 30 : 34, 24, 34)
+    : fluid(compactViewport ? 28 : 30, 24, 30);
   const panelTitleLineHeight = panelTitleSize + 5;
   const stepTitleSize = fluid(compactViewport ? 18 : 20, 16, 20);
   const stepBodySize = fluid(compactViewport ? 14 : 15, 13, 15);
-  const buttonHeight = fluid(compactViewport ? 58 : 64, 52, 64, "height");
   const buttonFontSize = fluid(compactViewport ? 18 : 20, 16, 20);
-  const actionRow = wideLayout && compactViewport;
+  const actionRow = width >= 1260 && !compactViewport;
   const loginLabel = hasAuth ? "Mit Spotify verbunden" : "Mit Spotify verbinden";
   const startLabel = creatingLobby ? "Session wird erstellt..." : "Host-Session starten";
 
@@ -78,7 +79,12 @@ export function HostLoginScreen({
               Session in drei Schritten starten
             </Text>
 
-            <View style={{ flexDirection: wideLayout ? "row" : "column", gap: fluid(12, 10, 12, "height") }}>
+            <View
+              style={{
+                flexDirection: width >= 1320 && !compactViewport ? "row" : "column",
+                gap: fluid(12, 10, 12, "height"),
+              }}
+            >
               {[
                 {
                   step: "1",
@@ -217,24 +223,24 @@ export function HostLoginScreen({
             <View
               style={{
                 width: "100%",
-                maxWidth: actionRow ? 520 : 420,
+                maxWidth: actionRow ? 620 : 520,
                 alignSelf: "center",
                 flexDirection: actionRow ? "row" : "column",
                 gap: fluid(12, 10, 12, "height"),
               }}
             >
-              <BBButton
+              <HostActionButton
                 title={loginLabel}
                 onPress={onLogin}
                 disabled={authBusy || hasAuth}
-                style={{ flex: actionRow ? 1 : undefined, height: buttonHeight }}
+                style={{ flex: actionRow ? 1 : undefined }}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
-              <BBButton
+              <HostActionButton
                 title={startLabel}
                 onPress={onStartSession}
                 disabled={!hasAuth || creatingLobby || authBusy}
-                style={{ flex: actionRow ? 1 : undefined, height: buttonHeight }}
+                style={{ flex: actionRow ? 1 : undefined }}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
             </View>

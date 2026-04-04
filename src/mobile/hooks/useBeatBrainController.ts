@@ -26,6 +26,7 @@ import {
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
+import { getRequiredQuizSeedPoolSize } from "../../shared/quiz/playlistRequirements";
 import type { LobbyState, PlaylistCard, QuizQuestion, Screen } from "../../shared/types/app";
 import { openSpotifyApp } from "../services/spotifyAppRemote";
 import {
@@ -184,6 +185,10 @@ function toMultiplayerConnectionMessage(baseUrl: string, error?: unknown) {
   return `Backend unter ${baseUrl} ist vom Handy nicht erreichbar.${cause}`;
 }
 
+function isInvalidStoredHostJwtError(error: unknown) {
+  return error instanceof ApiHttpError && error.status === 401;
+}
+
 type ChooseViewMode = "normal" | "error";
 type ChooseLoadResult =
   | { ok: true; cards: PlaylistCard[] }
@@ -275,6 +280,28 @@ export function useBeatBrainController() {
 
   const hasAuth = Boolean(hostJwt);
   const effectiveApiBaseUrl = mpApiBaseUrlOverride ?? API_BASE_URL;
+  const requiredPlaylistTrackCount = getRequiredQuizSeedPoolSize(questionCount);
+  const chooseStartDisabledReason = useMemo(() => {
+    if (!selectedPlaylist) {
+      return null;
+    }
+
+    const trackCount =
+      typeof selectedPlaylist.trackCount === "number" &&
+      Number.isFinite(selectedPlaylist.trackCount)
+        ? Math.max(0, Math.floor(selectedPlaylist.trackCount))
+        : null;
+
+    if (trackCount === null || trackCount >= requiredPlaylistTrackCount) {
+      return null;
+    }
+
+    if (trackCount === 0) {
+      return "Diese BeatBrain-Playlist enthaelt aktuell noch keine spielbaren Tracks.";
+    }
+
+    return `Diese BeatBrain-Playlist enthaelt aktuell nur ${trackCount} Tracks. Fuer ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benoetigt.`;
+  }, [questionCount, requiredPlaylistTrackCount, selectedPlaylist]);
 
   const setPersistedHostJwt = (jwt: string | null) => {
     setHostJwt(jwt);
@@ -440,13 +467,21 @@ export function useBeatBrainController() {
             id: playlist.id,
             title: playlist.name || playlist.id,
             imageUrl: playlist.coverUrl || "",
+            tags: playlist.tags,
+            decadeTag: playlist.decadeTag,
+            categoryType: playlist.categoryType,
+            trackCount: playlist.trackCount,
           }));
           playlistsLoadedForJwtRef.current = jwtKey;
           setPlaylists(cards);
           setSelectedPlaylistIndex((index) => Math.max(0, Math.min(index, cards.length - 1)));
           return { ok: true, cards };
         } catch (error) {
-          if (__DEV__) {
+          if (isInvalidStoredHostJwtError(error)) {
+            setPersistedHostJwt(null);
+          }
+
+          if (__DEV__ && (withUiState || !isInvalidStoredHostJwtError(error))) {
             console.error("[choose] playlist resolve failed", error);
           }
 
@@ -696,6 +731,14 @@ export function useBeatBrainController() {
           : Array.isArray(payload?.message) && typeof payload.message[0] === "string"
             ? payload.message[0]
             : "Socket request failed.";
+      const normalizedMessage = message.trim().toLowerCase();
+      if (
+        normalizedMessage === "player session not found" ||
+        normalizedMessage === "player not in lobby"
+      ) {
+        playerSessionIdRef.current = null;
+        shouldAutoResumePlayerRef.current = false;
+      }
       clearPendingPlayerJoin();
       setMpJoinError(message);
     });
@@ -806,6 +849,20 @@ export function useBeatBrainController() {
       name,
       avatarDataUrl,
     };
+    const previousIdentity = activeMultiplayerIdentityRef.current;
+    const currentPlayerSessionId = playerSessionIdRef.current;
+    const shouldReusePlayerSession =
+      shouldAutoResumePlayerRef.current &&
+      Boolean(currentPlayerSessionId) &&
+      previousIdentity?.joinCode === joinCode &&
+      previousIdentity?.name === name &&
+      previousIdentity?.avatarDataUrl === avatarDataUrl;
+
+    if (!shouldReusePlayerSession) {
+      playerSessionIdRef.current = null;
+      shouldAutoResumePlayerRef.current = false;
+    }
+
     activeMultiplayerIdentityRef.current = identity;
     setMpJoinError(null);
     startPendingPlayerJoin(joinCode, baseUrl);
@@ -813,7 +870,11 @@ export function useBeatBrainController() {
     if (socket.disconnected) {
       socket.connect();
     }
-    emitPlayerJoin(socket, identity, playerSessionIdRef.current);
+    emitPlayerJoin(
+      socket,
+      identity,
+      shouldReusePlayerSession ? currentPlayerSessionId : null,
+    );
   };
 
   const playerAnswer = (answer: string) => {
@@ -1131,6 +1192,7 @@ export function useBeatBrainController() {
     playlistTitle: string,
     decadeTag?: string,
     forceQuestionCount?: number,
+    trackCount?: number,
   ) => {
     if (isStartingQuizRef.current) {
       return;
@@ -1144,12 +1206,27 @@ export function useBeatBrainController() {
       if (screen.name === "choose") {
         setChooseViewMode("error");
       }
+      isStartingQuizRef.current = false;
       setIsStartingQuiz(false);
       return;
     }
 
     const isChooseScreen = screen.name === "choose";
     const effectiveQuestionCount = clampQuestionCount(forceQuestionCount ?? questionCount);
+    const minimumRequiredTracks = getRequiredQuizSeedPoolSize(effectiveQuestionCount);
+    const normalizedTrackCount =
+      typeof trackCount === "number" && Number.isFinite(trackCount)
+        ? Math.max(0, Math.floor(trackCount))
+        : null;
+    if (
+      isChooseScreen &&
+      normalizedTrackCount !== null &&
+      normalizedTrackCount < minimumRequiredTracks
+    ) {
+      isStartingQuizRef.current = false;
+      setIsStartingQuiz(false);
+      return;
+    }
     setQuestionCount(effectiveQuestionCount);
     if (isChooseScreen) {
       clearChooseErrorState();
@@ -1399,6 +1476,8 @@ export function useBeatBrainController() {
       const stored = await getStoredHostJwt();
       if (stored) {
         setHostJwt(stored);
+      } else {
+        setPersistedHostJwt(null);
       }
     };
 
@@ -1582,6 +1661,7 @@ export function useBeatBrainController() {
     selectedPlaylistIndex,
     selectedPlaylist,
     setSelectedPlaylistIndex,
+    chooseStartDisabledReason,
     carouselRef,
     playlistIdInput,
     setPlaylistIdInput,

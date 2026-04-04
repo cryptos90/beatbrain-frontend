@@ -15,7 +15,14 @@ import {
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
+import { getRequiredQuizSeedPoolSize } from "../../shared/quiz/playlistRequirements";
 import type { LobbyState, PlaylistCard, QuizQuestion } from "../../shared/types/app";
+import {
+  disconnectHostSpotifyWebPlayback,
+  getPreferredHostRoundPlaybackMode,
+  playHostTrackWithWebSdkFallback,
+  primeHostSpotifyWebPlayback,
+} from "../services/spotifyHostPlayback";
 
 type HostScreen =
   | "start"
@@ -250,6 +257,10 @@ function toMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function isInvalidStoredHostJwtError(error: unknown) {
+  return error instanceof ApiHttpError && error.status === 401;
+}
+
 function getHostWebStorage(): Storage | null {
   if (Platform.OS !== "web") {
     return null;
@@ -323,6 +334,8 @@ export function useHostController() {
 
   const [questionCount, setQuestionCountState] = useState(20);
   const [playlists, setPlaylists] = useState<PlaylistCard[]>([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(false);
+  const [playlistsError, setPlaylistsError] = useState<string | null>(null);
   const [selectedPlaylistIndex, setSelectedPlaylistIndexState] = useState(0);
   const [playlistIdInput, setPlaylistIdInput] = useState("");
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -338,6 +351,10 @@ export function useHostController() {
 
   const socketRef = useRef<Socket | null>(null);
   const lobbyJoinCodeRef = useRef<string | null>(null);
+  const questionPlaybackKeyRef = useRef<string | null>(null);
+  const startQuestionPlaybackRef = useRef<(nextQuestion: QuizQuestion | null) => Promise<void>>(
+    async () => {},
+  );
   const preferredLobbyScreenRef = useRef<LobbyScreenPreference>("lobby");
   const [preferredLobbyScreenState, setPreferredLobbyScreenState] =
     useState<LobbyScreenPreference>("lobby");
@@ -348,6 +365,28 @@ export function useHostController() {
   }, []);
 
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
+  const requiredPlaylistTrackCount = getRequiredQuizSeedPoolSize(questionCount);
+  const chooseStartDisabledReason = useMemo(() => {
+    if (!selectedPlaylist) {
+      return null;
+    }
+
+    const trackCount =
+      typeof selectedPlaylist.trackCount === "number" &&
+      Number.isFinite(selectedPlaylist.trackCount)
+        ? Math.max(0, Math.floor(selectedPlaylist.trackCount))
+        : null;
+
+    if (trackCount === null || trackCount >= requiredPlaylistTrackCount) {
+      return null;
+    }
+
+    if (trackCount === 0) {
+      return "Diese BeatBrain-Playlist enthaelt aktuell noch keine spielbaren Tracks.";
+    }
+
+    return `Diese BeatBrain-Playlist enthaelt aktuell nur ${trackCount} Tracks. Fuer ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benoetigt.`;
+  }, [questionCount, requiredPlaylistTrackCount, selectedPlaylist]);
 
   const hasAuth = Boolean(hostJwt);
   const totalPlayers = lobby?.players.length ?? 0;
@@ -403,6 +442,48 @@ export function useHostController() {
     }),
     [hostJwt],
   );
+
+  const primeHostPlayback = useCallback(() => {
+    if (Platform.OS !== "web" || !hostJwt) {
+      return;
+    }
+    void primeHostSpotifyWebPlayback(apiContext);
+  }, [apiContext, hostJwt]);
+
+  const startQuestionPlayback = useCallback(
+    async (nextQuestion: QuizQuestion | null) => {
+      if (Platform.OS !== "web") {
+        return;
+      }
+
+      const trackUri = String(nextQuestion?.correctTrackUri ?? "").trim();
+      const correctSongId = String(nextQuestion?.correctSongId ?? "").trim();
+      if (!trackUri || !correctSongId) {
+        return;
+      }
+
+      const playbackKey = `${correctSongId}:${trackUri}`;
+      questionPlaybackKeyRef.current = playbackKey;
+      setPlaybackError(null);
+
+      const result = await playHostTrackWithWebSdkFallback(apiContext, trackUri);
+      if (questionPlaybackKeyRef.current !== playbackKey) {
+        return;
+      }
+
+      if (!result.ok) {
+        setPlaybackError(result.message);
+        return;
+      }
+
+      setPlaybackError(null);
+    },
+    [apiContext],
+  );
+
+  useEffect(() => {
+    startQuestionPlaybackRef.current = startQuestionPlayback;
+  }, [startQuestionPlayback]);
 
   const navigateToScreen = useCallback(
     (
@@ -613,6 +694,7 @@ export function useHostController() {
   }, [resolveRoute, setPreferredLobbyScreen]);
 
   const resetRoundFlags = () => {
+    questionPlaybackKeyRef.current = null;
     setAllAnswered(false);
     setTimeUp(false);
     setAllContinued(false);
@@ -653,10 +735,12 @@ export function useHostController() {
     socket.on("round:question", (payload: { question?: QuizQuestion }) => {
       setActionBusy(false);
       setSocketError(null);
-      setQuestion(payload.question ?? null);
+      const nextQuestion = payload.question ?? null;
+      setQuestion(nextQuestion);
       setCorrectAnswer(null);
       resetRoundFlags();
       navigateToScreen("quiz", { mode: "replace" });
+      void startQuestionPlaybackRef.current(nextQuestion);
     });
 
     socket.on("round:reveal", (payload: { correctAnswer: string; state: LobbyState }) => {
@@ -761,6 +845,7 @@ export function useHostController() {
       return;
     }
 
+    primeHostPlayback();
     setSocketError(null);
     setCreatingLobby(true);
     const socket = connectSocket();
@@ -796,6 +881,7 @@ export function useHostController() {
       return;
     }
 
+    primeHostPlayback();
     setActionBusy(true);
     setSocketError(null);
     const socket = connectSocket();
@@ -804,6 +890,7 @@ export function useHostController() {
       joinCode: lobby.joinCode,
       quizSessionId: sessionId,
       timerMs: 30_000,
+      playbackMode: getPreferredHostRoundPlaybackMode(),
     });
   };
 
@@ -813,6 +900,7 @@ export function useHostController() {
       setSetupError("Bitte eine Playlist wählen.");
       return;
     }
+    primeHostPlayback();
     setCreatingSession(true);
     setSetupError(null);
     setSocketError(null);
@@ -846,6 +934,10 @@ export function useHostController() {
       setSetupError("Bitte eine Playlist auswählen.");
       return;
     }
+    if (chooseStartDisabledReason) {
+      setSetupError(chooseStartDisabledReason);
+      return;
+    }
     await createSessionForPlaylist(playlistId, selectedPlaylist?.decadeTag);
   };
 
@@ -863,6 +955,7 @@ export function useHostController() {
       return;
     }
 
+    primeHostPlayback();
     setActionBusy(true);
     setPreferredLobbyScreen("setupMode");
     setSocketError(null);
@@ -934,6 +1027,8 @@ export function useHostController() {
       const stored = await getStoredHostJwt();
       if (stored) {
         setHostJwt(stored);
+      } else {
+        setPersistedHostJwt(null);
       }
       setAuthHydrated(true);
     };
@@ -942,16 +1037,34 @@ export function useHostController() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
     if (!hasAuth) {
+      disconnectHostSpotifyWebPlayback();
+      return;
+    }
+
+    void primeHostSpotifyWebPlayback(apiContext);
+  }, [apiContext, hasAuth]);
+
+  useEffect(() => {
+    if (!hasAuth) {
+      setPlaylistsLoading(false);
+      setPlaylistsError(null);
+      setPlaylists([]);
       return;
     }
 
     let cancelled = false;
 
     const loadPlaylists = async () => {
+      setPlaylistsLoading(true);
+      setPlaylistsError(null);
       try {
         const resolved = await getChoosePlaylists(apiContext);
-        if (cancelled || !resolved.length) {
+        if (cancelled) {
           return;
         }
 
@@ -959,15 +1072,36 @@ export function useHostController() {
           id: playlist.id,
           title: playlist.name || playlist.id,
           imageUrl: playlist.coverUrl || "",
+          tags: playlist.tags,
+          decadeTag: playlist.decadeTag,
+          categoryType: playlist.categoryType,
+          trackCount: playlist.trackCount,
         }));
         setPlaylists(cards);
         setSelectedPlaylistIndexState((index) => Math.max(0, Math.min(index, cards.length - 1)));
+        setPlaylistsError(cards.length ? null : "Keine kuratierten Playlists gefunden.");
       } catch (error) {
         if (cancelled) {
           return;
         }
-        if (__DEV__) {
+
+        if (isInvalidStoredHostJwtError(error)) {
+          setPersistedHostJwt(null);
+        }
+
+        setPlaylists([]);
+        setPlaylistsError(
+          isInvalidStoredHostJwtError(error)
+            ? "Spotify-Login abgelaufen. Bitte erneut verbinden."
+            : toMessage(error, "Kuratierte Playlists konnten nicht geladen werden."),
+        );
+
+        if (__DEV__ && !isInvalidStoredHostJwtError(error)) {
           console.error("[host] playlist resolve failed", error);
+        }
+      } finally {
+        if (!cancelled) {
+          setPlaylistsLoading(false);
         }
       }
     };
@@ -1066,6 +1200,7 @@ export function useHostController() {
 
   useEffect(() => {
     return () => {
+      disconnectHostSpotifyWebPlayback();
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -1084,12 +1219,16 @@ export function useHostController() {
     startSpotifyLogin,
 
     playlists: playlists as PlaylistCard[],
+    playlistsLoading,
+    playlistsError,
     selectedPlaylistIndex,
     setSelectedPlaylistIndex: (value: number) => {
       const normalized = Math.max(0, Math.floor(value));
+      setSetupError(null);
       setSelectedPlaylistIndexState(normalized);
     },
     selectedPlaylist,
+    chooseStartDisabledReason,
     playlistIdInput,
     setPlaylistIdInput,
     questionCount,

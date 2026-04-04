@@ -1,8 +1,8 @@
 import React from "react";
 import Slider from "@react-native-community/slider";
 import { Text, View } from "react-native";
-import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
+import { HostActionButton } from "../components/HostActionButton";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
@@ -26,8 +26,8 @@ export function HostSetupModeScreen({
   onCreateMode,
   notice,
 }: Props) {
-  const { width, fluid } = useHostViewport();
-  const wideCards = width >= 980;
+  const { width, fluid, canUseWideSplit } = useHostViewport();
+  const wideCards = canUseWideSplit;
   const sectionGap = fluid(20, 14, 20, "height");
   const cardPaddingX = fluid(24, 18, 24);
   const cardPaddingY = fluid(22, 18, 22, "height");
@@ -119,12 +119,14 @@ export function HostSetupModeScreen({
 
         <View style={{ flexDirection: wideCards ? "row" : "column", gap: fluid(16, 12, 16, "height") }}>
           <ModeCard
-            title=""
+            title="Kuratiert starten"
+            description="Spotify-Playlists laden, am Big Screen auswählen und direkt mit der Session verbinden."
             cta="Aus Playlists wählen"
             onPress={onChooseMode}
           />
           <ModeCard
-            title=""
+            title="Direkt per ID"
+            description="Eine bekannte Playlist-ID manuell eingeben, wenn du ohne Auswahlgitter arbeiten willst."
             cta="Mit Playlist-ID starten"
             onPress={onCreateMode}
           />
@@ -136,10 +138,12 @@ export function HostSetupModeScreen({
 
 function ModeCard({
   title,
+  description,
   cta,
   onPress,
 }: {
   title: string;
+  description: string;
   cta: string;
   onPress: () => void;
 }) {
@@ -164,15 +168,26 @@ function ModeCard({
           fontSize: fluid(28, 22, 28),
           lineHeight: fluid(32, 26, 32),
           fontWeight: "900",
+          textAlign: "center",
         }}
       >
         {title}
       </Text>
-      <View style={{ width: "100%", maxWidth: 360 }}>
-        <BBButton
+      <Text
+        style={{
+          color: "rgba(32,44,89,0.82)",
+          fontSize: fluid(15, 13, 15),
+          lineHeight: fluid(22, 18, 22),
+          fontWeight: "600",
+          textAlign: "center",
+        }}
+      >
+        {description}
+      </Text>
+      <View style={{ width: "100%", maxWidth: 420 }}>
+        <HostActionButton
           title={cta}
           onPress={onPress}
-          style={{ height: fluid(62, 54, 62, "height") }}
           textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
         />
       </View>

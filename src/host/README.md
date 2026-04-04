@@ -16,9 +16,10 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 ## Layout-Prinzip
 
 - `center when there is space, otherwise scroll`
+- `no fixed sizes for layout-relevant host containers, cards and action rows`
 - Die gemeinsame Viewport-Huelle liegt in `src/host/components/HostPage.tsx`.
 - `src/host/components/HostLayout.tsx` nutzt `HostPage` unterhalb des Host-Headers mit Logo.
-- `src/host/hooks/useHostViewport.ts` liefert host-only Fluid-Sizing aus aktueller Viewport-Breite und -Hoehe, damit UI-Elemente nicht mit festen Groessen auf Monitor-Annahmen beruhen.
+- `src/host/hooks/useHostViewport.ts` liefert host-only Fluid-Sizing aus aktueller Viewport-Breite und -Hoehe, mit `narrow < 1024`, `laptop 1024-1439`, `wide >= 1440` plus `shortHeight < 780`.
 - Host/Web ist der grosse Bildschirm fuer Moderation, Session, Quiz und Results.
 - Die Mobile App bleibt der reine Player-/Antwort-Client und wird von diesem Layoutpfad nicht beruehrt.
 - Wenn der verfuegbare Platz groesser als der Screen-Content ist, wird vertikal zentriert.
@@ -29,7 +30,7 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 - Start/Login: `HostLoginScreen`
 - Session/Lobby: `HostLobbyScreen`
 - Setup-Auswahl: `HostSetupModeScreen`
-- Quiz-Auswahl: `HostQuizSetupScreen`
+- Quiz-Auswahl: `HostChoosePlaylistScreen` (kompatibler Re-Export weiterhin ueber `HostQuizSetupScreen.tsx`)
 - Quiz per Playlist-ID: `HostQuizCreateScreen`
 - Live-Quiz: `HostQuizScreen`
 - Results: `HostResultsScreen`
@@ -39,7 +40,8 @@ Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
 - Alle Host-Screens laufen ueber `HostLayout` und damit indirekt ueber `HostPage`.
 - Groessen fuer Header, Cards, Buttons, Typografie und Teile der Quiz-/Lobby-UI werden ueber `useHostViewport` fluide aus Breite und Hoehe des Browser-Viewports abgeleitet.
 - Host-Container bleiben ueber `maxWidth` zentriert und reagieren mit abgestuften horizontalen paddings auf Browserbreite.
-- Buttons bleiben in moderaten Breiten statt fensterbreit zu werden.
+- Buttons bleiben in moderaten Breiten statt fensterbreit zu werden und nutzen host-only `HostActionButton`.
+- Die Playlist-Auswahl bleibt ein horizontales Carousel; es wird nur viewport-basiert skaliert und im unteren Aktionsbereich kompakter gehalten.
 - Mehrspaltige Bereiche fallen je nach Breite von 3-4 Spalten ueber 2-3 Spalten bis auf 1 Spalte zurueck.
 - Diese Anpassungen sind host-only; mobile Screens und mobile Navigation bleiben unberuehrt.
 

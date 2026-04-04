@@ -18,14 +18,14 @@ export function HostHeader({
   subtitle,
   compact = false,
 }: Props) {
-  const { width, height, fluid, isShortViewport } = useHostViewport();
+  const { width, fluid, isShortHeight, isWideViewport } = useHostViewport();
   const hasCopy = Boolean(String(title ?? "").trim() || String(subtitle ?? "").trim());
-  const compactViewport = isShortViewport;
-  const horizontalPadding = fluid(width >= 760 ? 22 : 18, 16, 28, "width");
+  const compactViewport = isShortHeight;
+  const horizontalPadding = fluid(width >= 1024 ? 24 : width >= 720 ? 20 : 16, 16, 28, "width");
   const effectiveCompact = compact || compactViewport;
   const logoWidth = effectiveCompact
-    ? fluid(width >= 760 ? 164 : 150, 138, 168)
-    : fluid(width >= 760 ? 220 : 190, 170, 236);
+    ? fluid(width >= 760 ? 164 : 150, 138, 172)
+    : fluid(isWideViewport ? 228 : width >= 760 ? 212 : 184, 164, 236);
   const logoHeight = effectiveCompact ? Math.round(logoWidth * 0.4) : Math.round(logoWidth * 0.41);
   const titleFontSize = effectiveCompact ? fluid(26, 20, 28) : fluid(38, 26, 40);
   const titleLineHeight = titleFontSize + (effectiveCompact ? 4 : 6);
@@ -38,10 +38,19 @@ export function HostHeader({
       style={{
         paddingTop: effectiveCompact ? fluid(14, 10, 16, "height") : fluid(26, 18, 30, "height"),
         paddingHorizontal: horizontalPadding,
-        paddingBottom: effectiveCompact ? fluid(10, 8, 12, "height") : hasCopy ? fluid(18, 14, 22, "height") : fluid(14, 12, 18, "height"),
+        paddingBottom: effectiveCompact
+          ? fluid(10, 8, 12, "height")
+          : hasCopy
+            ? fluid(18, 14, 22, "height")
+            : fluid(14, 12, 18, "height"),
       }}
     >
-      <View style={{ alignItems: "center", gap: effectiveCompact ? fluid(8, 6, 10, "height") : fluid(13, 10, 16, "height") }}>
+      <View
+        style={{
+          alignItems: "center",
+          gap: effectiveCompact ? fluid(8, 6, 10, "height") : fluid(13, 10, 16, "height"),
+        }}
+      >
         <View
           style={{
             paddingHorizontal: fluid(12, 10, 14, "width"),

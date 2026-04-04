@@ -1,5 +1,5 @@
 import React, { type ReactNode, useState } from "react";
-import { ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { Platform, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import { useHostViewport } from "../hooks/useHostViewport";
 
 type Props = {
@@ -8,13 +8,13 @@ type Props = {
 };
 
 export function HostPage({ children, maxWidth }: Props) {
-  const { width, height, fluid } = useHostViewport();
+  const { width, height, fluid, isShortHeight } = useHostViewport();
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
 
-  const sidePadding = fluid(width >= 760 ? 28 : 20, 16, 40, "width");
-  const topPadding = fluid(14, 6, 18, "height");
-  const bottomPadding = fluid(24, 14, 30, "height");
+  const sidePadding = fluid(width >= 1024 ? 32 : width >= 720 ? 24 : 18, 14, 40, "width");
+  const topPadding = fluid(isShortHeight ? 8 : 16, 6, 20, "height");
+  const bottomPadding = fluid(isShortHeight ? 18 : 28, 14, 34, "height");
   const availableHeight = Math.max(0, viewportHeight - topPadding - bottomPadding);
   const shouldScroll = viewportHeight > 0 && contentHeight > availableHeight + 1;
   const shouldCenter = !shouldScroll;
@@ -35,14 +35,29 @@ export function HostPage({ children, maxWidth }: Props) {
   };
 
   return (
-    <View style={{ flex: 1, minHeight: height }} onLayout={onViewportLayout}>
+    <View
+      style={[
+        {
+          flex: 1,
+          width: "100%",
+          minHeight: height,
+          maxWidth: "100%",
+        },
+        Platform.OS === "web" ? ({ minHeight: "100vh", overflowX: "hidden" } as any) : null,
+      ]}
+      onLayout={onViewportLayout}
+    >
       <ScrollView
-        style={{ flex: 1 }}
+        style={[
+          { flex: 1, width: "100%" },
+          Platform.OS === "web" ? ({ overflowX: "hidden" } as any) : null,
+        ]}
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: topPadding,
           paddingBottom: bottomPadding,
           paddingHorizontal: sidePadding,
+          width: "100%",
         }}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={shouldScroll}

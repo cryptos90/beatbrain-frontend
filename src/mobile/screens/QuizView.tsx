@@ -17,7 +17,7 @@ import {
   QUIZ_LOGO_WIDTH,
 } from "../../constants/app";
 import { Colors, Radius } from "../../theme";
-import type { QuizQuestion } from "../../shared/types/app";
+import type { QuizQuestion, QuizQuestionOption } from "../../shared/types/app";
 
 type Props = {
   currentQuestion: QuizQuestion | null;
@@ -86,6 +86,20 @@ export function QuizView({
   const isYearInputQuestion =
     currentQuestion.questionObject.format === "year_input" ||
     currentQuestion.questionObject.answerType === "year-input";
+  const isCoverOptionsQuestion = currentQuestion.questionObject.format === "cover_options";
+  const optionDetailsByValue = new Map(
+    (currentQuestion.optionDetails ?? []).map((option) => [option.value, option]),
+  );
+  const orderedOptions: QuizQuestionOption[] = currentQuestion.options.map((value) => {
+    const existing = optionDetailsByValue.get(value);
+    if (existing) {
+      return existing;
+    }
+    return {
+      value,
+      label: value,
+    };
+  });
   const payload = currentQuestion.questionObject.payload;
   const toleranceRaw = Number(payload?.toleranceYears ?? 0);
   const toleranceYears =
@@ -127,9 +141,9 @@ export function QuizView({
         ? "rgba(239,68,68,0.95)"
         : "transparent";
   const rows =
-    currentQuestion.options.length <= 2
-      ? [currentQuestion.options]
-      : [currentQuestion.options.slice(0, 2), currentQuestion.options.slice(2, 4)];
+    orderedOptions.length <= 2
+      ? [orderedOptions]
+      : [orderedOptions.slice(0, 2), orderedOptions.slice(2, 4)];
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -255,13 +269,80 @@ export function QuizView({
               </View>
             </View>
           </View>
+        ) : isCoverOptionsQuestion ? (
+          <View style={{ marginTop: 18, gap: 14 }}>
+            {rows.map((row, rowIndex) => (
+              <View key={rowIndex} style={{ flexDirection: "row", gap: 14 }}>
+                {row.map((option, optionIndex) => {
+                  const pressed = pickedOption === option.value;
+                  const isCorrect = option.value === currentQuestion.correctAnswer;
+                  let backgroundColor = Colors.navy;
+                  if (revealed) {
+                    if (isCorrect) {
+                      backgroundColor = "#16a34a";
+                    } else if (pressed) {
+                      backgroundColor = "#dc2626";
+                    }
+                  }
+
+                  return (
+                    <Pressable
+                      key={`${option.value}-${rowIndex}-${optionIndex}`}
+                      onPress={() => onPickOption(option.value)}
+                      disabled={revealed}
+                      style={{
+                        flex: 1,
+                        backgroundColor,
+                        borderRadius: Radius.xl,
+                        padding: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: revealed && !isCorrect && !pressed ? 0.7 : 1,
+                        minHeight: 170,
+                        gap: 8,
+                      }}
+                    >
+                      {!!option.coverUrl ? (
+                        <Image
+                          source={{ uri: option.coverUrl }}
+                          style={{ width: "100%", aspectRatio: 1, borderRadius: 14 }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: "100%",
+                            aspectRatio: 1,
+                            borderRadius: 14,
+                            backgroundColor: "rgba(255,255,255,0.14)",
+                          }}
+                        />
+                      )}
+                      {revealed && (
+                        <Text
+                          style={{
+                            color: Colors.textOnNavy,
+                            fontSize: 14,
+                            fontWeight: "700",
+                            textAlign: "center",
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                {row.length < 2 && <View style={{ flex: 1 }} />}
+              </View>
+            ))}
+          </View>
         ) : (
           <View style={{ marginTop: 18, gap: 14 }}>
             {rows.map((row, rowIndex) => (
               <View key={rowIndex} style={{ flexDirection: "row", gap: 14 }}>
-                {row.map((label, optionIndex) => {
-                  const pressed = pickedOption === label;
-                  const isCorrect = label === currentQuestion.correctAnswer;
+                {row.map((option, optionIndex) => {
+                  const pressed = pickedOption === option.value;
+                  const isCorrect = option.value === currentQuestion.correctAnswer;
                   let backgroundColor = Colors.navy;
                   if (revealed) {
                     if (isCorrect) {
@@ -273,8 +354,8 @@ export function QuizView({
 
                   return (
                     <Pressable
-                      key={`${label}-${rowIndex}-${optionIndex}`}
-                      onPress={() => onPickOption(label)}
+                      key={`${option.value}-${rowIndex}-${optionIndex}`}
+                      onPress={() => onPickOption(option.value)}
                       disabled={revealed}
                       style={{
                         flex: 1,
@@ -296,7 +377,7 @@ export function QuizView({
                           paddingHorizontal: 10,
                         }}
                       >
-                        {label}
+                        {option.label}
                       </Text>
                     </Pressable>
                   );

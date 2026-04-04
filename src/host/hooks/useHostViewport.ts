@@ -11,6 +11,12 @@ export function useHostViewport() {
   const widthScale = width / 1440;
   const heightScale = height / 900;
   const mixedScale = clamp(Math.min(widthScale, heightScale), 0.68, 1.22);
+  const isNarrowViewport = width < 1024;
+  const isLaptopViewport = width >= 1024 && width < 1440;
+  const isWideViewport = width >= 1440;
+  const isShortHeight = height < 780;
+  const isVeryShortHeight = height < 680;
+  const canUseWideSplit = width >= 1180 && !isShortHeight;
 
   const fluid = (base: number, min: number, max: number, axis: FluidAxis = "mixed") => {
     const scale =
@@ -29,9 +35,14 @@ export function useHostViewport() {
     widthScale,
     heightScale,
     mixedScale,
-    isShortViewport: height < 760,
-    isVeryShortViewport: height < 680,
-    isNarrowViewport: width < 900,
+    isShortViewport: isShortHeight,
+    isVeryShortViewport: isVeryShortHeight,
+    isShortHeight,
+    isVeryShortHeight,
+    isNarrowViewport,
+    isLaptopViewport,
+    isWideViewport,
+    canUseWideSplit,
     fluid,
   };
 }

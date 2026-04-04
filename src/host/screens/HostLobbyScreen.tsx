@@ -1,8 +1,8 @@
 import React from "react";
 import { Image, Text, View } from "react-native";
-import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
 import type { LobbyState } from "../../shared/types/app";
+import { HostActionButton } from "../components/HostActionButton";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
@@ -49,19 +49,29 @@ export function HostLobbyScreen({
   onOpenSetup,
   notice,
 }: Props) {
-  const { width, fluid } = useHostViewport();
-  const wideStage = width >= 1120;
-  const gridColumns = width >= 1680 ? 5 : width >= 1320 ? 4 : width >= 980 ? 3 : width >= 640 ? 2 : 1;
+  const { width, fluid, isShortHeight, canUseWideSplit } = useHostViewport();
+  const wideStage = canUseWideSplit;
+  const gridColumns =
+    width >= 1680 && !isShortHeight
+      ? 5
+      : width >= 1360
+        ? 4
+        : width >= 1040
+          ? 3
+          : width >= 700
+            ? 2
+            : 1;
   const sessionCodeFontSize = fluid(82, 40, 88);
   const sessionCodeLineHeight = sessionCodeFontSize + fluid(6, 4, 8, "height");
   const sessionCodeLetterSpacing = fluid(5, 2, 6, "width");
-  const prepareButtonHeight = fluid(78, 58, 82, "height");
   const prepareButtonFontSize = fluid(23, 17, 24);
   const qrSize = fluid(208, 148, 220);
   const playerAvatarSize = fluid(88, 64, 92);
   const playerCardMinHeight = fluid(188, 156, 196, "height");
   const playerNameFontSize = fluid(21, 18, 22);
   const hasPlayers = Boolean(lobby?.players.length);
+  const playerColumnWidth =
+    gridColumns === 1 ? "100%" : gridColumns === 2 ? "50%" : gridColumns === 3 ? "33.333%" : gridColumns === 4 ? "25%" : "20%";
 
   return (
     <HostLayout maxWidth={1380} notice={notice} headerEyebrow="Lobby Stage">
@@ -116,24 +126,20 @@ export function HostLobbyScreen({
                   {lobby.joinCode}
                 </Text>
 
-                <View style={{ width: wideStage ? 360 : "100%", maxWidth: 420 }}>
-                  <BBButton
+                <View style={{ width: "100%", maxWidth: wideStage ? 460 : 520 }}>
+                  <HostActionButton
                     title="Spiel vorbereiten"
                     onPress={onOpenSetup}
                     disabled={!canOpenSetup}
                     style={{
-                      height: prepareButtonHeight,
-                      backgroundColor: Colors.white,
-                      borderWidth: 4,
-                      borderColor: "rgba(46,196,182,0.4)",
                       shadowColor: "#000000",
                       shadowOpacity: 0.2,
                       shadowRadius: 16,
                       shadowOffset: { width: 0, height: 8 },
                       elevation: 10,
                     }}
+                    invert
                     textStyle={{
-                      color: Colors.navy,
                       fontSize: prepareButtonFontSize,
                       fontWeight: "900",
                       letterSpacing: 0.4,
@@ -170,6 +176,8 @@ export function HostLobbyScreen({
                 {!!joinUrl && (
                   <View
                     style={{
+                      width: "100%",
+                      maxWidth: qrSize + 28,
                       padding: 12,
                       borderRadius: Radius.lg,
                       backgroundColor: Colors.white,
@@ -179,7 +187,13 @@ export function HostLobbyScreen({
                       source={{
                         uri: `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(joinUrl)}`,
                       }}
-                      style={{ width: qrSize, height: qrSize, borderRadius: 16 }}
+                      style={{
+                        width: "100%",
+                        aspectRatio: 1,
+                        maxWidth: qrSize,
+                        alignSelf: "center",
+                        borderRadius: 16,
+                      }}
                     />
                   </View>
                 )}
@@ -235,7 +249,7 @@ export function HostLobbyScreen({
                     <View
                       key={player.id}
                       style={{
-                        width: `${100 / gridColumns}%`,
+                        width: playerColumnWidth,
                         paddingHorizontal: 6,
                         marginBottom: 12,
                       }}

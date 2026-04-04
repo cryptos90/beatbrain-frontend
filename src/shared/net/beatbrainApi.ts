@@ -3,6 +3,9 @@ import type { ChoosePlaylist } from "../types/app";
 import type { ApiClientContext, JsonRecord } from "./apiClient";
 import { requestJson } from "./apiClient";
 
+const CHOOSE_REQUEST_TIMEOUT_MS = 20_000;
+const CREATE_QUIZ_SESSION_TIMEOUT_MS = 25_000;
+
 export type SpotifyPlayerDevice = {
   id: string;
   name: string;
@@ -128,6 +131,7 @@ export async function getChoosePlaylists(
 ): Promise<ChoosePlaylist[]> {
   const payload = (await requestJson(context, "/choose", {
     method: "GET",
+    timeoutMs: CHOOSE_REQUEST_TIMEOUT_MS,
   })) as unknown;
 
   if (!Array.isArray(payload)) {
@@ -139,6 +143,20 @@ export async function getChoosePlaylists(
       id: String((entry as any)?.id ?? "").trim(),
       name: String((entry as any)?.name ?? "").trim(),
       coverUrl: String((entry as any)?.coverUrl ?? ""),
+      tags: Array.isArray((entry as any)?.tags)
+        ? ((entry as any).tags as unknown[])
+            .map((tag) => String(tag ?? "").trim())
+            .filter(Boolean)
+        : undefined,
+      decadeTag: String((entry as any)?.decadeTag ?? "").trim() || undefined,
+      categoryType:
+        (entry as any)?.categoryType === "decade" || (entry as any)?.categoryType === "genre"
+          ? (entry as any).categoryType
+          : undefined,
+      trackCount:
+        typeof (entry as any)?.trackCount === "number"
+          ? Number((entry as any).trackCount)
+          : undefined,
     }))
     .filter((entry) => Boolean(entry.id));
 }
@@ -160,6 +178,7 @@ export async function createQuizSession(
   return requestJson(context, "/quiz/sessions", {
     method: "POST",
     body: JSON.stringify(payload),
+    timeoutMs: CREATE_QUIZ_SESSION_TIMEOUT_MS,
   });
 }
 

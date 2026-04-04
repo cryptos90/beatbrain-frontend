@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, TextInput, View } from "react-native";
-import { BBButton } from "../../components/BBButton";
 import { Colors, Radius } from "../../theme";
+import { HostActionButton } from "../components/HostActionButton";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
 
@@ -97,12 +97,11 @@ export function HostQuizCreateScreen({
           </Text>
         )}
 
-        <View style={{ width: "100%", maxWidth: 360, alignSelf: "center" }}>
-          <BBButton
+        <View style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}>
+          <HostActionButton
             title={creatingSession ? "Quiz wird vorbereitet..." : "Quiz starten"}
             onPress={onCreateSession}
             disabled={creatingSession}
-            style={{ height: fluid(64, 54, 64, "height") }}
             textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
           />
         </View>

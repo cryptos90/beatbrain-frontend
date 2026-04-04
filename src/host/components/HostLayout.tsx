@@ -1,5 +1,5 @@
 import React, { type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 import { Colors } from "../../theme";
 import { useHostViewport } from "../hooks/useHostViewport";
 import { HostHeader } from "./HostHeader";
@@ -24,21 +24,27 @@ export function HostLayout({
   headerSubtitle,
   compactHeader = false,
 }: Props) {
-  const { width, height, isShortViewport, fluid } = useHostViewport();
-  const compactViewport = isShortViewport;
-  const noticeOuterPadding = fluid(width >= 760 ? 22 : 18, 16, 28, "width");
+  const { width, height, isShortHeight, fluid } = useHostViewport();
+  const compactViewport = isShortHeight;
+  const noticeOuterPadding = fluid(width >= 1024 ? 24 : width >= 720 ? 20 : 16, 16, 28, "width");
   const noticeMaxWidth = Math.min(maxWidth, Math.max(0, width - noticeOuterPadding * 2));
   const effectiveCompactHeader = compactHeader || compactViewport;
+  const orbLarge = fluid(340, 220, 420, "width");
+  const orbMedium = fluid(300, 200, 360, "width");
+  const orbSmall = fluid(140, 96, 180, "width");
 
   return (
     <View
-      style={{
-        flex: 1,
-        height,
-        minHeight: height,
-        backgroundColor: Colors.bg,
-        overflow: "hidden",
-      }}
+      style={[
+        {
+          flex: 1,
+          width: "100%",
+          minHeight: height,
+          backgroundColor: Colors.bg,
+          overflow: "hidden",
+        },
+        Platform.OS === "web" ? ({ minHeight: "100vh", overflowX: "hidden" } as any) : null,
+      ]}
     >
       <View
         pointerEvents="none"
@@ -46,9 +52,9 @@ export function HostLayout({
           position: "absolute",
           top: -120,
           right: -60,
-          width: 340,
-          height: 340,
-          borderRadius: 170,
+          width: orbLarge,
+          height: orbLarge,
+          borderRadius: orbLarge / 2,
           backgroundColor: "rgba(32,44,89,0.14)",
         }}
       />
@@ -58,9 +64,9 @@ export function HostLayout({
           position: "absolute",
           bottom: -140,
           left: -90,
-          width: 300,
-          height: 300,
-          borderRadius: 150,
+          width: orbMedium,
+          height: orbMedium,
+          borderRadius: orbMedium / 2,
           backgroundColor: "rgba(255,255,255,0.2)",
         }}
       />
@@ -70,9 +76,9 @@ export function HostLayout({
           position: "absolute",
           top: "32%",
           left: "9%",
-          width: 140,
-          height: 140,
-          borderRadius: 70,
+          width: orbSmall,
+          height: orbSmall,
+          borderRadius: orbSmall / 2,
           backgroundColor: "rgba(255,255,255,0.12)",
         }}
       />
