@@ -1,10 +1,13 @@
 import React from "react";
 import Slider from "@react-native-community/slider";
 import { Text, View } from "react-native";
-import { Colors, Radius } from "../../theme";
+import { Colors } from "../../theme";
 import { HostActionButton } from "../components/HostActionButton";
-import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
+import { HostPanel } from "../components/HostPanel";
+import { HostResponsiveGrid } from "../components/HostResponsiveGrid";
+import { HostScreenContainer } from "../components/HostScreenContainer";
+import { useHostViewport } from "../hooks/useHostViewport";
 
 type Props = {
   questionCount: number;
@@ -19,6 +22,12 @@ function normalizeQuestionCount(value: number) {
   return Math.max(10, Math.min(100, Math.round(clamped / 10) * 10));
 }
 
+const SPEED_HINTS = [
+  "10-20 fuer schnelle Runden",
+  "30-50 fuer den Hauptmodus",
+  "60+ nur fuer lange Sessions",
+];
+
 export function HostSetupModeScreen({
   questionCount,
   onQuestionCountChange,
@@ -26,36 +35,17 @@ export function HostSetupModeScreen({
   onCreateMode,
   notice,
 }: Props) {
-  const { width, fluid, canUseWideSplit } = useHostViewport();
-  const wideCards = canUseWideSplit;
-  const sectionGap = fluid(20, 14, 20, "height");
-  const cardPaddingX = fluid(24, 18, 24);
-  const cardPaddingY = fluid(22, 18, 22, "height");
-  const titleSize = fluid(38, 28, 38);
-  const hintSize = fluid(14, 12, 14);
+  const { contentMax, radii, space, typeScale, fluidBetween, isCompactHeight } = useHostViewport();
 
   return (
-    <HostLayout maxWidth={1080} notice={notice} headerEyebrow="Quiz Setup">
-      <View
-        style={{
-          width: "100%",
-          gap: sectionGap,
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: Colors.navy,
-            borderRadius: Radius.xl,
-            paddingHorizontal: cardPaddingX,
-            paddingVertical: cardPaddingY,
-            gap: fluid(12, 10, 12, "height"),
-          }}
-        >
+    <HostLayout maxWidth={contentMax.wide} notice={notice} headerEyebrow="Quiz Setup">
+      <HostScreenContainer>
+        <HostPanel tone="navy" padding={isCompactHeight ? "sm" : "md"}>
           <Text
             style={{
               color: "rgba(46,196,182,0.88)",
               fontWeight: "900",
-              fontSize: 13,
+              fontSize: typeScale.label,
               letterSpacing: 1.2,
               textTransform: "uppercase",
               textAlign: "center",
@@ -67,7 +57,7 @@ export function HostSetupModeScreen({
             style={{
               color: Colors.textOnNavy,
               fontWeight: "900",
-              fontSize: titleSize,
+              fontSize: fluidBetween(isCompactHeight ? 24 : 28, isCompactHeight ? 34 : 40, "width"),
               textAlign: "center",
             }}
           >
@@ -86,26 +76,24 @@ export function HostSetupModeScreen({
               onQuestionCountChange(normalizeQuestionCount(value))
             }
           />
-          <View style={{ flexDirection: wideCards ? "row" : "column", gap: fluid(10, 8, 10, "height") }}>
-            {[
-              "10-20 für schnelle Runden",
-              "30-50 für den Hauptmodus",
-              "60+ nur für lange Sessions",
-            ].map((hint) => (
+          <HostResponsiveGrid minItemWidth={190} maxColumns={3} gap={space.sm}>
+            {SPEED_HINTS.map((hint) => (
               <View
                 key={hint}
                 style={{
-                  flex: 1,
-                  borderRadius: 999,
+                  height: "100%",
+                  borderRadius: radii.pill,
                   backgroundColor: "rgba(255,255,255,0.12)",
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
+                  paddingHorizontal: space.md,
+                  paddingVertical: isCompactHeight ? space.xs : space.sm,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
                   style={{
                     color: Colors.textOnNavy,
-                    fontSize: hintSize,
+                    fontSize: typeScale.bodySm,
                     fontWeight: "700",
                     textAlign: "center",
                   }}
@@ -114,14 +102,14 @@ export function HostSetupModeScreen({
                 </Text>
               </View>
             ))}
-          </View>
-        </View>
+          </HostResponsiveGrid>
+        </HostPanel>
 
-        <View style={{ flexDirection: wideCards ? "row" : "column", gap: fluid(16, 12, 16, "height") }}>
+        <HostResponsiveGrid minItemWidth={280} maxColumns={2} gap={space.lg}>
           <ModeCard
             title="Kuratiert starten"
-            description="Spotify-Playlists laden, am Big Screen auswählen und direkt mit der Session verbinden."
-            cta="Aus Playlists wählen"
+            description="Spotify-Playlists laden, am Big Screen auswaehlen und direkt mit der Session verbinden."
+            cta="Aus Playlists waehlen"
             onPress={onChooseMode}
           />
           <ModeCard
@@ -130,8 +118,8 @@ export function HostSetupModeScreen({
             cta="Mit Playlist-ID starten"
             onPress={onCreateMode}
           />
-        </View>
-      </View>
+        </HostResponsiveGrid>
+      </HostScreenContainer>
     </HostLayout>
   );
 }
@@ -147,26 +135,19 @@ function ModeCard({
   cta: string;
   onPress: () => void;
 }) {
-  const { fluid } = useHostViewport();
+  const { contentMax, typeScale, fluidBetween, isCompactHeight } = useHostViewport();
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "rgba(255,255,255,0.76)",
-        borderRadius: Radius.xl,
-        paddingHorizontal: fluid(22, 18, 22),
-        paddingVertical: fluid(22, 18, 22, "height"),
-        gap: fluid(14, 10, 14, "height"),
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <HostPanel
+      tone="glass"
+      padding={isCompactHeight ? "sm" : "md"}
+      style={{ height: "100%", alignItems: "center", justifyContent: "center" }}
     >
       <Text
         style={{
           color: Colors.textOnBg,
-          fontSize: fluid(28, 22, 28),
-          lineHeight: fluid(32, 26, 32),
+          fontSize: fluidBetween(isCompactHeight ? 20 : 22, isCompactHeight ? 26 : 30, "width"),
+          lineHeight: fluidBetween(isCompactHeight ? 24 : 26, isCompactHeight ? 30 : 34, "width"),
           fontWeight: "900",
           textAlign: "center",
         }}
@@ -176,21 +157,21 @@ function ModeCard({
       <Text
         style={{
           color: "rgba(32,44,89,0.82)",
-          fontSize: fluid(15, 13, 15),
-          lineHeight: fluid(22, 18, 22),
+          fontSize: typeScale.bodySm,
+          lineHeight: typeScale.bodySm + 7,
           fontWeight: "600",
           textAlign: "center",
         }}
       >
         {description}
       </Text>
-      <View style={{ width: "100%", maxWidth: 420 }}>
+      <View style={{ width: "100%", maxWidth: contentMax.compact }}>
         <HostActionButton
           title={cta}
           onPress={onPress}
-          textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
+          textStyle={{ fontSize: fluidBetween(17, 20, "width"), fontWeight: "800" }}
         />
       </View>
-    </View>
+    </HostPanel>
   );
 }

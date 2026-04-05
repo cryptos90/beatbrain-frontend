@@ -1,53 +1,70 @@
 # Host Web App
 
-Dieser Ordner enthält die Host-Webapp für den Big-Screen-Flow:
-- Login (HostLoginScreen)
-- Lobby (HostLobbyScreen)
-- Quiz Setup (HostQuizSetupScreen)
-- Quiz (HostQuizScreen)
-- Results (HostResultsScreen)
+Dieser Ordner enthaelt die browserbasierte Host-Webapp fuer BeatBrain:
+- Login: `HostLoginScreen`
+- Lobby: `HostLobbyScreen`
+- Setup: `HostSetupModeScreen`
+- Playlist-Auswahl: `HostChoosePlaylistScreen`
+- Manuelle Playlist-ID: `HostQuizCreateScreen`
+- Live Quiz: `HostQuizScreen`
+- Results: `HostResultsScreen`
 
 ## Host-Erkennung
 
-- Der Host-Flow wird nur im Web gerendert.
-- Einstieg ist `beatbrain-frontend/App.tsx`.
-- Host wird aktiviert, wenn `Platform.OS === "web"` und entweder die Route mit `/host` beginnt oder keine Mobile-Query-Parameter wie `joinCode`, `sessionId`, `code`, `auth_code`, `state` oder `error` vorhanden sind.
+- Einstieg bleibt `beatbrain-frontend/App.tsx`.
+- Die aktive Host-App rendert nur auf `Platform.OS === "web"`.
+- Produktive Host-Routen liegen unter `/host/*`.
+- Browser-only Preview-Routen fuer Layout-QA liegen unter `/host/preview/*` und rendern dieselben Screen-Komponenten mit festen Fixture-Daten.
 
-## Layout-Prinzip
+## Responsive Architektur
 
-- `center when there is space, otherwise scroll`
-- `no fixed sizes for layout-relevant host containers, cards and action rows`
-- Die gemeinsame Viewport-Huelle liegt in `src/host/components/HostPage.tsx`.
-- `src/host/components/HostLayout.tsx` nutzt `HostPage` unterhalb des Host-Headers mit Logo.
-- `src/host/hooks/useHostViewport.ts` liefert host-only Fluid-Sizing aus aktueller Viewport-Breite und -Hoehe, mit `narrow < 1024`, `laptop 1024-1439`, `wide >= 1440` plus `shortHeight < 780`.
-- Host/Web ist der grosse Bildschirm fuer Moderation, Session, Quiz und Results.
-- Die Mobile App bleibt der reine Player-/Antwort-Client und wird von diesem Layoutpfad nicht beruehrt.
-- Wenn der verfuegbare Platz groesser als der Screen-Content ist, wird vertikal zentriert.
-- Wenn der Content hoeher als der verfuegbare Bereich ist, startet die Seite oben und scrollt vertikal statt abgeschnitten zu werden.
+- Die Host-Webapp verwendet host-only Responsive-Primitives:
+  - `src/host/hooks/useHostViewport.ts`
+  - `src/host/components/HostScreenContainer.tsx`
+  - `src/host/components/HostPanel.tsx`
+  - `src/host/components/HostActionBar.tsx`
+  - `src/host/components/HostResponsiveGrid.tsx`
+  - `src/host/components/HostPlayerAvatar.tsx`
+  - `src/host/components/HostPlayerStageGrid.tsx`
+- `HostPage` misst nur den verfuegbaren Bereich unter Header/Notice und setzt `center when there is space, otherwise scroll` mit vertikalem Reflow um.
+- `HostResponsiveGrid` reagiert auf seine gemessene Containerbreite und ersetzt starre Desktop-Spalten bzw. horizontale Host-Only-Carousels.
+- `HostActionBar` laesst Button-Gruppen umbrechen oder stapelt sie auf kleineren Viewports.
+- `HostPlayerAvatar` verhindert Layout-Brueche bei fehlenden Avatar-URLs.
+- `HostPlayerStageGrid` haelt die Lobby-Spielerflaeche auf konstanter Hoehe und skaliert die Kacheln innerhalb des verfuegbaren Raums statt den Bereich durch neue Zeilen wachsen zu lassen.
 
-## Verwendete Screens
+## Breakpoint-Strategie
 
-- Start/Login: `HostLoginScreen`
-- Session/Lobby: `HostLobbyScreen`
-- Setup-Auswahl: `HostSetupModeScreen`
-- Quiz-Auswahl: `HostChoosePlaylistScreen` (kompatibler Re-Export weiterhin ueber `HostQuizSetupScreen.tsx`)
-- Quiz per Playlist-ID: `HostQuizCreateScreen`
-- Live-Quiz: `HostQuizScreen`
-- Results: `HostResultsScreen`
+- `verySmall`: bis `359`
+- `small`: `360-479`
+- `mobile`: `480-767`
+- `tablet`: `768-1023`
+- `laptop`: `1024-1279`
+- `desktop`: `1280-1599`
+- `wide`: `1600+`
+- Zusatzflags:
+  - `compactHeight`: unter `860`
+  - `lowHeight`: unter `760`
+  - `veryLowHeight`: unter `680`
+  - `largeDisplay`: `2440+`
+  - `4K`: `3840+` oder `2160` Hoehe
+  - `shortHeight`: unter `700`
+  - `veryShortHeight`: unter `580`
+  - `landscapePhone`: bis `932x430`
 
-## Responsive Hinweise
+## Wichtige Layout-Aenderungen
 
-- Alle Host-Screens laufen ueber `HostLayout` und damit indirekt ueber `HostPage`.
-- Groessen fuer Header, Cards, Buttons, Typografie und Teile der Quiz-/Lobby-UI werden ueber `useHostViewport` fluide aus Breite und Hoehe des Browser-Viewports abgeleitet.
-- Host-Container bleiben ueber `maxWidth` zentriert und reagieren mit abgestuften horizontalen paddings auf Browserbreite.
-- Buttons bleiben in moderaten Breiten statt fensterbreit zu werden und nutzen host-only `HostActionButton`.
-- Die Playlist-Auswahl bleibt ein horizontales Carousel; es wird nur viewport-basiert skaliert und im unteren Aktionsbereich kompakter gehalten.
-- Mehrspaltige Bereiche fallen je nach Breite von 3-4 Spalten ueber 2-3 Spalten bis auf 1 Spalte zurueck.
-- Diese Anpassungen sind host-only; mobile Screens und mobile Navigation bleiben unberuehrt.
+- Login, Lobby, Setup, Choose, Create, Quiz und Results nutzen jetzt dieselben Panels, Spacing-Tokens und Action-Bars.
+- Die Playlist-Auswahl ist kein horizontales Carousel mehr, sondern ein responsives Kartenraster ohne Zoom-Zwang.
+- Quiz-Antwortgruppen umbrechen jetzt immer sauber; es gibt kein `nowrap`-Layout fuer dichte Reveal-Zustaende mehr.
+- Header, Logo, Typografie, Innenabstaende, CTA-Hoehen und Content-Breiten reagieren host-only fluide auf Viewport-Breite und -Hoehe.
+- Horizontale Overflows werden ueber gemessene Containerbreiten, Wrap-Verhalten und reduzierte Max-Breiten vermieden.
 
-## Lokal testen
+## Doku und Verifikation
 
-- `cd beatbrain-frontend`
-- `npm run start:web`
-- `http://localhost:8081/` oder `http://localhost:8081/host/start` im Browser aufrufen
-- Relevante Host-Web-Breakpoints: `2560x1440`, `1920x1080`, `1366x768`, `1280x800`, `1024x768`, `820x600`, `390x844`
+- Die detaillierte Responsive-Doku liegt unter `beatbrain-frontend/docs/host-responsive.md`.
+- Browser-Verifikation kann lokal reproduziert werden mit:
+  - `npx expo export -p web --dev --clear --max-workers 1`
+  - `node scripts/serve-dist.cjs dist 8081`
+  - `node scripts/verify-host-responsive.cjs`
+- Das QA-Skript prueft jetzt sowohl horizontalen Dokument-Overflow als auch innere vertikale Scroll-Regionen im Web-Host-Flow.
+- Der Report liegt danach unter `beatbrain-frontend/test-results/host-responsive/report.json`.

@@ -24,9 +24,17 @@ export function HostLayout({
   headerSubtitle,
   compactHeader = false,
 }: Props) {
-  const { width, height, isShortHeight, fluid } = useHostViewport();
-  const compactViewport = isShortHeight;
-  const noticeOuterPadding = fluid(width >= 1024 ? 24 : width >= 720 ? 20 : 16, 16, 28, "width");
+  const {
+    width,
+    height,
+    compactViewport,
+    isCompactHeight,
+    pagePadding,
+    space,
+    typeScale,
+    fluid,
+  } = useHostViewport();
+  const noticeOuterPadding = pagePadding;
   const noticeMaxWidth = Math.min(maxWidth, Math.max(0, width - noticeOuterPadding * 2));
   const effectiveCompactHeader = compactHeader || compactViewport;
   const orbLarge = fluid(340, 220, 420, "width");
@@ -43,7 +51,9 @@ export function HostLayout({
           backgroundColor: Colors.bg,
           overflow: "hidden",
         },
-        Platform.OS === "web" ? ({ minHeight: "100vh", overflowX: "hidden" } as any) : null,
+        Platform.OS === "web"
+          ? ({ minHeight: "100dvh", overflowX: "clip" } as any)
+          : null,
       ]}
     >
       <View
@@ -95,10 +105,10 @@ export function HostLayout({
             alignSelf: "center",
             width: "100%",
             maxWidth: Math.min(noticeMaxWidth, 860),
-            marginBottom: compactViewport ? 8 : width >= 1100 ? 12 : 10,
+            marginBottom: isCompactHeight ? space.xxs : compactViewport ? space.xs : space.sm,
             marginHorizontal: noticeOuterPadding,
-            paddingHorizontal: fluid(16, 12, 18, "width"),
-            paddingVertical: fluid(compactViewport ? 8 : 10, 7, 10, "height"),
+            paddingHorizontal: space.md,
+            paddingVertical: isCompactHeight ? space.xxs : compactViewport ? space.xs : space.sm,
             borderRadius: 999,
             backgroundColor: "rgba(255,255,255,0.68)",
           }}
@@ -107,7 +117,7 @@ export function HostLayout({
             style={{
               color: Colors.textOnBg,
               textAlign: "center",
-              fontSize: fluid(14, 12, 14),
+              fontSize: typeScale.bodySm,
               fontWeight: "700",
               opacity: 0.92,
             }}

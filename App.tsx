@@ -1,6 +1,7 @@
 import React from "react";
 import { Platform } from "react-native";
 import { HostApp } from "./src/host/HostApp";
+import { HostPreviewApp } from "./src/host/HostPreviewApp";
 import { useBeatBrainController } from "./src/mobile/hooks/useBeatBrainController";
 import { AppRouter } from "./src/mobile/navigation/AppRouter";
 
@@ -23,6 +24,10 @@ function shouldRenderHostWebApp() {
     return false;
   }
 
+  if (window.location.pathname.startsWith("/host/preview")) {
+    return false;
+  }
+
   if (window.location.pathname.startsWith("/host")) {
     return true;
   }
@@ -31,6 +36,14 @@ function shouldRenderHostWebApp() {
 }
 
 export default function App() {
+  if (
+    Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith("/host/preview")
+  ) {
+    return <HostPreviewApp />;
+  }
+
   if (shouldRenderHostWebApp()) {
     return <HostApp />;
   }

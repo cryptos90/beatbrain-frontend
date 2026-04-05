@@ -67,9 +67,18 @@ Notes:
 - Opening `http://localhost:8081/` now defaults to the host web app and canonicalizes to `/host/start`.
 - Player join links still use the root URL with query params, for example `http://localhost:8081/?joinCode=ABCD`.
 - Host-Web nutzt den gemeinsamen Layoutpfad `src/host/components/HostLayout.tsx` + `src/host/components/HostPage.tsx` mit dem Prinzip `center when there is space, otherwise scroll`; Mobile bleibt davon unberuehrt.
-- Host-Web-Groessen kommen host-only aus `src/host/hooks/useHostViewport.ts`, mit den Breakpoints `narrow < 1024`, `laptop 1024-1439`, `wide >= 1440` plus `shortHeight < 780`, damit Header, Cards, Buttons und Typografie auf Breite und Hoehe des Browser-Viewports reagieren statt auf feste Monitor-Groessen.
-- Die Host-Playlist-Auswahl bleibt ein responsives Carousel in `src/host/screens/HostChoosePlaylistScreen.tsx`; der Look bleibt gleich, wird aber ueber Breite/Hoehe sauber skaliert.
-- Fuer lokale Host-Web-Checks wurden die Breakpoints `2560x1440`, `1920x1080`, `1366x768`, `1280x800`, `1024x768`, `820x600` und `390x844` als relevante Layout-Groessen festgehalten.
+- Host-Web-Groessen kommen host-only aus `src/host/hooks/useHostViewport.ts`, mit den Breakpoint-Baendern `359`, `479`, `767`, `1023`, `1279`, `1599`, `1600+` plus Zusatzflags fuer `shortHeight`, `landscapePhone`, `2440+` und `4K`.
+- Fuer niedrige Laptop-Hoehen gibt es zusaetzlich host-only Flags `compactHeight (<860)`, `lowHeight (<760)` und `veryLowHeight (<680)`.
+- Gemeinsame host-only Primitives fuer Reflow und Wrap liegen in `src/host/components/HostPanel.tsx`, `HostActionBar.tsx`, `HostResponsiveGrid.tsx`, `HostScreenContainer.tsx` und `HostPlayerAvatar.tsx`.
+- Die Lobby-Spielerflaeche nutzt zusaetzlich `src/host/components/HostPlayerStageGrid.tsx`, damit viele Spieler die Stage nicht nach unten vergroessern, sondern ihre Kacheln innerhalb derselben Flaeche skalieren.
+- Die Host-Playlist-Auswahl ist jetzt ein responsives Kartenraster statt eines horizontalen Carousels, damit kleine Browserfenster keinen Zoom-Workaround mehr brauchen.
+- Browser-only Preview-Routen fuer Layout-QA liegen unter `/host/preview/*` und rendern dieselben Host-Screens mit festen Fixture-Daten.
+- Die ausfuehrliche Responsive-Doku liegt unter `docs/host-responsive.md`.
+- Fuer lokale Host-Web-Checks gibt es zusaetzlich:
+  - `npx expo export -p web --dev --clear --max-workers 1`
+  - `node scripts/serve-dist.cjs dist 8081`
+  - `node scripts/verify-host-responsive.cjs`
+- Das Verifikationsskript prueft jetzt sowohl horizontalen Overflow als auch innere vertikale Scroll-Regionen der Web-Host-Screens.
 
 ## Spotify redirect URI rules
 

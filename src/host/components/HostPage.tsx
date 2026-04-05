@@ -8,17 +8,24 @@ type Props = {
 };
 
 export function HostPage({ children, maxWidth }: Props) {
-  const { width, height, fluid, isShortHeight } = useHostViewport();
+  const {
+    width,
+    pagePadding,
+    space,
+    compactViewport,
+    isCompactHeight,
+    isLowHeight,
+  } = useHostViewport();
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
 
-  const sidePadding = fluid(width >= 1024 ? 32 : width >= 720 ? 24 : 18, 14, 40, "width");
-  const topPadding = fluid(isShortHeight ? 8 : 16, 6, 20, "height");
-  const bottomPadding = fluid(isShortHeight ? 18 : 28, 14, 34, "height");
+  const sidePadding = pagePadding;
+  const topPadding = isLowHeight ? space.xxs : compactViewport ? space.xs : space.sm;
+  const bottomPadding = isLowHeight ? space.sm : isCompactHeight ? space.md : space.lg;
   const availableHeight = Math.max(0, viewportHeight - topPadding - bottomPadding);
-  const shouldScroll = viewportHeight > 0 && contentHeight > availableHeight + 1;
+  const shouldScroll = viewportHeight > 0 && contentHeight > availableHeight + 4;
   const shouldCenter = !shouldScroll;
-  const contentMaxWidth = Math.min(maxWidth, Math.max(0, width - sidePadding * 2));
+  const contentMaxWidth = Math.min(maxWidth, Math.max(240, width - sidePadding * 2));
 
   const onViewportLayout = (event: LayoutChangeEvent) => {
     const nextHeight = Math.max(0, event.nativeEvent.layout.height);
@@ -40,25 +47,35 @@ export function HostPage({ children, maxWidth }: Props) {
         {
           flex: 1,
           width: "100%",
-          minHeight: height,
+          minHeight: 0,
           maxWidth: "100%",
         },
-        Platform.OS === "web" ? ({ minHeight: "100vh", overflowX: "hidden" } as any) : null,
+        Platform.OS === "web" ? ({ overflowX: "clip" } as any) : null,
       ]}
       onLayout={onViewportLayout}
     >
       <ScrollView
         style={[
           { flex: 1, width: "100%" },
-          Platform.OS === "web" ? ({ overflowX: "hidden" } as any) : null,
+          Platform.OS === "web" ? ({ overflowX: "clip" } as any) : null,
         ]}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: topPadding,
-          paddingBottom: bottomPadding,
-          paddingHorizontal: sidePadding,
-          width: "100%",
-        }}
+        contentContainerStyle={[
+          {
+            flexGrow: 1,
+            paddingTop: topPadding,
+            paddingBottom: bottomPadding,
+            paddingHorizontal: sidePadding,
+            width: "100%",
+          },
+          Platform.OS === "web"
+            ? ({
+                minHeight: "100%",
+                paddingBottom: `calc(${bottomPadding}px + env(safe-area-inset-bottom, 0px))`,
+                paddingLeft: `calc(${sidePadding}px + env(safe-area-inset-left, 0px))`,
+                paddingRight: `calc(${sidePadding}px + env(safe-area-inset-right, 0px))`,
+              } as any)
+            : null,
+        ]}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={shouldScroll}
         showsVerticalScrollIndicator={shouldScroll}

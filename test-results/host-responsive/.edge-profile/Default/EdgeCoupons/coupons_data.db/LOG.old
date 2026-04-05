@@ -1,0 +1,6 @@
+2026/04/05-09:13:48.531 145bc Reusing MANIFEST C:\Users\patch\BeatBrain\beatbrain-frontend\test-results\host-responsive\.edge-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/04/05-09:13:48.532 145bc Recovering log #10
+2026/04/05-09:13:48.532 145bc Reusing old log C:\Users\patch\BeatBrain\beatbrain-frontend\test-results\host-responsive\.edge-profile\Default\EdgeCoupons/coupons_data.db/000010.log 
+2026/04/05-09:13:48.596 1184 Level-0 table #14: started
+2026/04/05-09:13:48.601 1184 Level-0 table #14: 682080 bytes OK
+2026/04/05-09:13:48.605 1184 Delete type=0 #10

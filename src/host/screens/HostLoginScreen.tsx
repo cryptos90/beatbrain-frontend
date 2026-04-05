@@ -1,8 +1,12 @@
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-import { Colors, Radius } from "../../theme";
+import { Colors } from "../../theme";
+import { HostActionBar } from "../components/HostActionBar";
 import { HostActionButton } from "../components/HostActionButton";
 import { HostLayout } from "../components/HostLayout";
+import { HostPanel } from "../components/HostPanel";
+import { HostResponsiveGrid } from "../components/HostResponsiveGrid";
+import { HostScreenContainer } from "../components/HostScreenContainer";
 import { useHostViewport } from "../hooks/useHostViewport";
 
 type Props = {
@@ -16,6 +20,24 @@ type Props = {
   notice?: string | null;
 };
 
+const LOGIN_STEPS = [
+  {
+    step: "1",
+    title: "Spotify verbinden",
+    text: "Der Host authentifiziert sich einmal mit Spotify.",
+  },
+  {
+    step: "2",
+    title: "Session oeffnen",
+    text: "Der grosse Bildschirm zeigt Join-Code und QR-Code.",
+  },
+  {
+    step: "3",
+    title: "Lesbar moderieren",
+    text: "Fragen, Timer und Aufloesung bleiben auf jedem Browserfenster im Fokus.",
+  },
+];
+
 export function HostLoginScreen({
   hasAuth,
   authBusy,
@@ -26,47 +48,40 @@ export function HostLoginScreen({
   onStartSession,
   notice,
 }: Props) {
-  const { width, fluid, isShortHeight, canUseWideSplit } = useHostViewport();
-  const compactViewport = isShortHeight;
+  const {
+    width,
+    canUseWideSplit,
+    compactViewport,
+    isCompactHeight,
+    isLowHeight,
+    contentMax,
+    radii,
+    space,
+    typeScale,
+    fluidBetween,
+  } = useHostViewport();
   const wideLayout = canUseWideSplit;
-  const sectionGap = fluid(20, 12, 20, "height");
-  const compactCardPadding = fluid(compactViewport ? 20 : 24, 18, 26);
-  const leftCardPaddingX = fluid(compactViewport ? 22 : 28, 18, 28);
-  const leftCardPaddingY = fluid(compactViewport ? 20 : 28, 18, 28, "height");
-  const panelTitleSize = wideLayout
-    ? fluid(compactViewport ? 30 : 34, 24, 34)
-    : fluid(compactViewport ? 28 : 30, 24, 30);
-  const panelTitleLineHeight = panelTitleSize + 5;
-  const stepTitleSize = fluid(compactViewport ? 18 : 20, 16, 20);
-  const stepBodySize = fluid(compactViewport ? 14 : 15, 13, 15);
-  const buttonFontSize = fluid(compactViewport ? 18 : 20, 16, 20);
-  const actionRow = width >= 1260 && !compactViewport;
+  const panelTitleSize = fluidBetween(isCompactHeight ? 22 : 24, isCompactHeight ? 32 : 36, "width");
+  const panelTitleLineHeight = panelTitleSize + (isLowHeight ? 4 : 6);
+  const stepTitleSize = fluidBetween(16, 20, "width");
+  const stepBodySize = typeScale.bodySm;
+  const buttonFontSize = fluidBetween(16, 20, "width");
   const loginLabel = hasAuth ? "Mit Spotify verbunden" : "Mit Spotify verbinden";
   const startLabel = creatingLobby ? "Session wird erstellt..." : "Host-Session starten";
 
   return (
     <HostLayout
-      maxWidth={1180}
+      maxWidth={contentMax.wide}
       notice={notice}
       headerEyebrow="Big Screen Host"
       compactHeader={compactViewport}
     >
-      <View
-        style={{
-          width: "100%",
-          gap: sectionGap,
-        }}
-      >
-        <View style={{ flexDirection: wideLayout ? "row" : "column", gap: sectionGap }}>
-          <View
-            style={{
-              flex: wideLayout ? 1.2 : undefined,
-              backgroundColor: Colors.navy,
-              borderRadius: Radius.xl,
-              paddingHorizontal: leftCardPaddingX,
-              paddingVertical: leftCardPaddingY,
-              gap: fluid(compactViewport ? 12 : 16, 10, 16, "height"),
-            }}
+      <HostScreenContainer>
+        <View style={{ flexDirection: wideLayout ? "row" : "column", gap: isCompactHeight ? space.md : space.lg }}>
+          <HostPanel
+            tone="navy"
+            padding={isCompactHeight ? "sm" : "md"}
+            style={{ flex: wideLayout ? 1.15 : undefined }}
           >
             <Text
               style={{
@@ -74,49 +89,37 @@ export function HostLoginScreen({
                 fontSize: panelTitleSize,
                 fontWeight: "900",
                 lineHeight: panelTitleLineHeight,
+                textAlign: wideLayout ? "left" : "center",
               }}
             >
               Session in drei Schritten starten
             </Text>
 
-            <View
-              style={{
-                flexDirection: width >= 1320 && !compactViewport ? "row" : "column",
-                gap: fluid(12, 10, 12, "height"),
-              }}
+            <HostResponsiveGrid
+              minItemWidth={width < 480 ? 170 : 210}
+              maxColumns={3}
+              gap={space.sm}
             >
-              {[
-                {
-                  step: "1",
-                  title: "Spotify verbinden",
-                  text: "Der Host authentifiziert sich einmal mit Spotify.",
-                },
-                {
-                  step: "2",
-                  title: "Session öffnen",
-                  text: "Der große Bildschirm zeigt Join-Code und QR-Code.",
-                },
-                {
-                  step: "3",
-                  title: "Lesbar moderieren",
-                  text: "Fragen, Timer und Auflösung bleiben extra groß im Fokus.",
-                },
-              ].map((item) => (
+              {LOGIN_STEPS.map((item) => (
                 <View
                   key={item.step}
                   style={{
-                    flex: 1,
+                    height: "100%",
+                    minHeight:
+                      width <= 479
+                        ? undefined
+                        : fluidBetween(isCompactHeight ? 118 : 136, isCompactHeight ? 154 : 176, "height"),
                     backgroundColor: "rgba(255,255,255,0.1)",
-                    borderRadius: Radius.lg,
-                    paddingHorizontal: fluid(compactViewport ? 12 : 14, 10, 14),
-                    paddingVertical: fluid(compactViewport ? 12 : 14, 10, 14, "height"),
-                    gap: fluid(compactViewport ? 6 : 8, 6, 8, "height"),
+                    borderRadius: radii.lg,
+                    paddingHorizontal: space.md,
+                    paddingVertical: isCompactHeight ? space.sm : space.md,
+                    gap: space.xs,
                   }}
                 >
                   <Text
                     style={{
                       color: Colors.textOnNavy,
-                      fontSize: 13,
+                      fontSize: typeScale.label,
                       fontWeight: "900",
                       letterSpacing: 1,
                     }}
@@ -144,23 +147,18 @@ export function HostLoginScreen({
                   </Text>
                 </View>
               ))}
-            </View>
-          </View>
+            </HostResponsiveGrid>
+          </HostPanel>
 
-          <View
-            style={{
-              flex: wideLayout ? 0.82 : undefined,
-              backgroundColor: "rgba(255,255,255,0.78)",
-              borderRadius: Radius.xl,
-              paddingHorizontal: compactCardPadding,
-              paddingVertical: compactCardPadding,
-              gap: fluid(compactViewport ? 12 : 16, 10, 16, "height"),
-            }}
+          <HostPanel
+            tone="glass"
+            padding={isCompactHeight ? "sm" : "md"}
+            style={{ flex: wideLayout ? 0.95 : undefined }}
           >
             <Text
               style={{
                 color: Colors.textOnBg,
-                fontSize: 14,
+                fontSize: typeScale.label,
                 fontWeight: "900",
                 letterSpacing: 1.2,
                 textTransform: "uppercase",
@@ -172,17 +170,17 @@ export function HostLoginScreen({
 
             <View
               style={{
-                borderRadius: Radius.lg,
+                borderRadius: radii.lg,
                 backgroundColor: hasAuth ? "rgba(22,163,74,0.14)" : "rgba(32,44,89,0.08)",
-                paddingHorizontal: fluid(16, 12, 16),
-                paddingVertical: fluid(compactViewport ? 12 : 16, 10, 16, "height"),
-                gap: fluid(compactViewport ? 6 : 8, 6, 8, "height"),
+                paddingHorizontal: space.lg,
+                paddingVertical: isCompactHeight ? space.md : space.lg,
+                gap: space.xs,
               }}
             >
               <Text
                 style={{
                   color: Colors.textOnBg,
-                  fontSize: fluid(compactViewport ? 20 : 22, 18, 22),
+                  fontSize: fluidBetween(20, 24, "width"),
                   fontWeight: "900",
                   textAlign: "center",
                 }}
@@ -192,25 +190,25 @@ export function HostLoginScreen({
               <Text
                 style={{
                   color: "rgba(32,44,89,0.86)",
-                  fontSize: stepBodySize,
-                  lineHeight: stepBodySize + 6,
+                  fontSize: typeScale.bodySm,
+                  lineHeight: typeScale.bodySm + 6,
                   fontWeight: "600",
                   textAlign: "center",
                 }}
               >
                 {hasAuth
                   ? "Spotify ist verbunden. Die Session kann jetzt gestartet werden."
-                  : "Verbinde zuerst Spotify, damit Playlists geladen und Sessions gestartet werden können."}
+                  : "Verbinde zuerst Spotify, damit Playlists geladen und Sessions gestartet werden koennen."}
               </Text>
             </View>
 
             {authBusy && (
-              <View style={{ alignItems: "center", gap: 10 }}>
+              <View style={{ alignItems: "center", gap: space.sm }}>
                 <ActivityIndicator size={36 as any} color={Colors.navy} />
                 <Text
                   style={{
                     color: Colors.textOnBg,
-                    fontSize: fluid(compactViewport ? 15 : 16, 14, 16),
+                    fontSize: typeScale.body,
                     fontWeight: "800",
                     textAlign: "center",
                   }}
@@ -220,36 +218,26 @@ export function HostLoginScreen({
               </View>
             )}
 
-            <View
-              style={{
-                width: "100%",
-                maxWidth: actionRow ? 620 : 520,
-                alignSelf: "center",
-                flexDirection: actionRow ? "row" : "column",
-                gap: fluid(12, 10, 12, "height"),
-              }}
-            >
+            <HostActionBar maxWidth={640} minItemWidth={220} stackBelow={920}>
               <HostActionButton
                 title={loginLabel}
                 onPress={onLogin}
                 disabled={authBusy || hasAuth}
-                style={{ flex: actionRow ? 1 : undefined }}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
               <HostActionButton
                 title={startLabel}
                 onPress={onStartSession}
                 disabled={!hasAuth || creatingLobby || authBusy}
-                style={{ flex: actionRow ? 1 : undefined }}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
-            </View>
+            </HostActionBar>
 
             {!!authError && (
               <Text
                 style={{
                   color: Colors.textOnBg,
-                  fontSize: 14,
+                  fontSize: typeScale.bodySm,
                   fontWeight: "700",
                   textAlign: "center",
                 }}
@@ -261,7 +249,7 @@ export function HostLoginScreen({
               <Text
                 style={{
                   color: Colors.textOnBg,
-                  fontSize: 14,
+                  fontSize: typeScale.bodySm,
                   fontWeight: "700",
                   textAlign: "center",
                 }}
@@ -269,9 +257,9 @@ export function HostLoginScreen({
                 {socketError}
               </Text>
             )}
-          </View>
+          </HostPanel>
         </View>
-      </View>
+      </HostScreenContainer>
     </HostLayout>
   );
 }

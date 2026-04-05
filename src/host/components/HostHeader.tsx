@@ -18,43 +18,51 @@ export function HostHeader({
   subtitle,
   compact = false,
 }: Props) {
-  const { width, fluid, isShortHeight, isWideViewport } = useHostViewport();
+  const {
+    width,
+    fluid,
+    compactViewport,
+    isLowHeight,
+    isWideViewport,
+    pagePadding,
+    space,
+    typeScale,
+  } = useHostViewport();
   const hasCopy = Boolean(String(title ?? "").trim() || String(subtitle ?? "").trim());
-  const compactViewport = isShortHeight;
-  const horizontalPadding = fluid(width >= 1024 ? 24 : width >= 720 ? 20 : 16, 16, 28, "width");
+  const horizontalPadding = pagePadding;
   const effectiveCompact = compact || compactViewport;
   const logoWidth = effectiveCompact
-    ? fluid(width >= 760 ? 164 : 150, 138, 172)
-    : fluid(isWideViewport ? 228 : width >= 760 ? 212 : 184, 164, 236);
-  const logoHeight = effectiveCompact ? Math.round(logoWidth * 0.4) : Math.round(logoWidth * 0.41);
-  const titleFontSize = effectiveCompact ? fluid(26, 20, 28) : fluid(38, 26, 40);
-  const titleLineHeight = titleFontSize + (effectiveCompact ? 4 : 6);
-  const subtitleFontSize = effectiveCompact ? fluid(13, 11, 14) : fluid(16, 14, 17);
-  const subtitleLineHeight = subtitleFontSize + (effectiveCompact ? 5 : 7);
+    ? fluid(width >= 760 ? 132 : 118, 96, 140)
+    : fluid(isWideViewport ? 186 : width >= 760 ? 172 : 150, 118, 194);
+  const logoHeight = Math.round(logoWidth * (effectiveCompact ? 0.38 : 0.39));
+  const titleFontSize = effectiveCompact ? fluid(22, 17, 26) : fluid(28, 20, 34);
+  const titleLineHeight = titleFontSize + (effectiveCompact ? 3 : 5);
+  const subtitleFontSize = effectiveCompact ? typeScale.bodySm : typeScale.body;
+  const subtitleLineHeight = subtitleFontSize + (effectiveCompact ? 4 : 6);
   const copyMaxWidth = Math.min(effectiveCompact ? 760 : 920, Math.max(0, width - horizontalPadding * 2));
 
   return (
     <View
       style={{
-        paddingTop: effectiveCompact ? fluid(14, 10, 16, "height") : fluid(26, 18, 30, "height"),
+        paddingTop: effectiveCompact ? (isLowHeight ? space.xs : space.sm) : space.lg,
         paddingHorizontal: horizontalPadding,
         paddingBottom: effectiveCompact
-          ? fluid(10, 8, 12, "height")
+          ? space.xs
           : hasCopy
-            ? fluid(18, 14, 22, "height")
-            : fluid(14, 12, 18, "height"),
+            ? space.md
+            : space.sm,
       }}
     >
       <View
         style={{
           alignItems: "center",
-          gap: effectiveCompact ? fluid(8, 6, 10, "height") : fluid(13, 10, 16, "height"),
+          gap: effectiveCompact ? space.xxs : space.xs,
         }}
       >
         <View
           style={{
-            paddingHorizontal: fluid(12, 10, 14, "width"),
-            paddingVertical: effectiveCompact ? fluid(5, 4, 6, "height") : fluid(6, 5, 7, "height"),
+            paddingHorizontal: space.sm,
+            paddingVertical: effectiveCompact ? space.xxs : space.xs,
             borderRadius: 999,
             backgroundColor: "rgba(32,44,89,0.9)",
           }}
@@ -62,7 +70,7 @@ export function HostHeader({
           <Text
             style={{
               color: Colors.textOnNavy,
-              fontSize: effectiveCompact ? fluid(10, 9, 11) : fluid(12, 10, 12),
+              fontSize: effectiveCompact ? typeScale.eyebrow : typeScale.label,
               fontWeight: "900",
               letterSpacing: 1.4,
               textTransform: "uppercase",
@@ -83,7 +91,7 @@ export function HostHeader({
         />
 
         {hasCopy && (
-          <View style={{ width: "100%", maxWidth: copyMaxWidth, gap: 6 }}>
+          <View style={{ width: "100%", maxWidth: copyMaxWidth, gap: space.xs }}>
             {!!String(title ?? "").trim() && (
               <Text
                 style={{

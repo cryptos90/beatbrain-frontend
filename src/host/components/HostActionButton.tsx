@@ -20,10 +20,9 @@ export function HostActionButton({
   textStyle,
   invert = false,
 }: Props) {
-  const { fluid } = useHostViewport();
-  const minHeight = fluid(62, 50, 72, "height");
-  const borderRadius = fluid(999, 999, 999);
-  const fontSize = fluid(19, 16, 22);
+  const { controlMinHeight, radii, space, typeScale, isCompactHeight } = useHostViewport();
+  const minHeight = controlMinHeight;
+  const fontSize = typeScale.bodyLg;
 
   return (
     <Pressable
@@ -35,9 +34,9 @@ export function HostActionButton({
         {
           width: "100%",
           minHeight,
-          borderRadius,
-          paddingHorizontal: fluid(20, 16, 28),
-          paddingVertical: fluid(14, 12, 18, "height"),
+          borderRadius: radii.pill,
+          paddingHorizontal: isCompactHeight ? space.md : space.lg,
+          paddingVertical: isCompactHeight ? space.xs : space.sm,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: invert ? Colors.white : Colors.navy,
@@ -55,7 +54,7 @@ export function HostActionButton({
             fontSize,
             fontWeight: "800",
             textAlign: "center",
-            lineHeight: fontSize + 4,
+            lineHeight: fontSize + 5,
           },
           textStyle,
         ]}

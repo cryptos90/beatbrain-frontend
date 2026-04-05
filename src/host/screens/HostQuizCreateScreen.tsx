@@ -1,9 +1,12 @@
 import React from "react";
 import { Text, TextInput, View } from "react-native";
-import { Colors, Radius } from "../../theme";
+import { Colors } from "../../theme";
+import { HostActionBar } from "../components/HostActionBar";
 import { HostActionButton } from "../components/HostActionButton";
-import { useHostViewport } from "../hooks/useHostViewport";
 import { HostLayout } from "../components/HostLayout";
+import { HostPanel } from "../components/HostPanel";
+import { HostScreenContainer } from "../components/HostScreenContainer";
+import { useHostViewport } from "../hooks/useHostViewport";
 
 type Props = {
   playlistIdInput: string;
@@ -22,58 +25,50 @@ export function HostQuizCreateScreen({
   onCreateSession,
   notice,
 }: Props) {
-  const { fluid } = useHostViewport();
+  const { contentMax, radii, space, typeScale, fluidBetween, isCompactHeight } = useHostViewport();
 
   return (
     <HostLayout
-      maxWidth={860}
+      maxWidth={contentMax.narrow}
       notice={notice}
       headerEyebrow="Playlist-ID"
-      headerTitle="Manuelle Playlist-Auswahl bleibt klar und groß auf dem Host-Screen."
-      headerSubtitle="Wenn du eine feste Playlist-ID kennst, kannst du sie hier direkt eingeben, ohne den Big-Screen-Flow zu verlieren."
+      headerTitle={
+        isCompactHeight
+          ? "Playlist-ID direkt eingeben."
+          : "Manuelle Playlist-Auswahl bleibt klar und lesbar."
+      }
+      headerSubtitle={
+        isCompactHeight
+          ? undefined
+          : "Wenn du eine feste Playlist-ID kennst, kannst du sie hier direkt eingeben, ohne den Host-Flow zu verlassen."
+      }
     >
-      <View
-        style={{
-          width: "100%",
-          gap: fluid(18, 12, 18, "height"),
-        }}
-      >
-        <View
-          style={{
-            borderRadius: Radius.xl,
-            backgroundColor: "rgba(255,255,255,0.72)",
-            paddingHorizontal: fluid(22, 16, 22),
-            paddingVertical: fluid(18, 14, 18, "height"),
-          }}
+      <HostScreenContainer>
+        <HostPanel
+          tone="glass"
+          padding={isCompactHeight ? "sm" : "md"}
+          maxWidth={contentMax.compact}
         >
           <Text
             style={{
               color: Colors.textOnBg,
-              fontSize: fluid(28, 22, 28),
+              fontSize: fluidBetween(24, 30, "width"),
               fontWeight: "900",
               textAlign: "center",
             }}
           >
             Playlist-ID eingeben
           </Text>
-        </View>
+        </HostPanel>
 
-        <View
-          style={{
-            backgroundColor: Colors.white,
-            borderRadius: Radius.lg,
-            paddingHorizontal: fluid(16, 12, 16),
-            paddingVertical: fluid(14, 12, 14, "height"),
-          }}
-        >
+        <HostPanel tone="white" padding={isCompactHeight ? "sm" : "md"}>
           <Text
             style={{
               color: "rgba(32,44,89,0.72)",
-              fontSize: fluid(13, 11, 13),
+              fontSize: typeScale.label,
               fontWeight: "800",
               letterSpacing: 1,
               textTransform: "uppercase",
-              marginBottom: 8,
             }}
           >
             Spotify Playlist-ID
@@ -83,29 +78,42 @@ export function HostQuizCreateScreen({
             onChangeText={onPlaylistIdInputChange}
             autoCapitalize="none"
             placeholder="Playlist ID eingeben"
+            placeholderTextColor="rgba(32,44,89,0.42)"
             style={{
-              fontSize: fluid(22, 17, 22),
               color: Colors.textOnBg,
+              fontSize: fluidBetween(18, 22, "width"),
               fontWeight: "700",
+              borderRadius: radii.md,
+              borderWidth: 1,
+              borderColor: "rgba(32,44,89,0.12)",
+              paddingHorizontal: space.md,
+              paddingVertical: space.sm,
             }}
           />
-        </View>
+        </HostPanel>
 
         {!!setupError && (
-          <Text style={{ color: Colors.textOnBg, textAlign: "center", fontWeight: "700" }}>
+          <Text
+            style={{
+              color: Colors.textOnBg,
+              textAlign: "center",
+              fontWeight: "700",
+              fontSize: typeScale.bodySm,
+            }}
+          >
             {setupError}
           </Text>
         )}
 
-        <View style={{ width: "100%", maxWidth: 420, alignSelf: "center" }}>
+        <HostActionBar maxWidth={contentMax.compact}>
           <HostActionButton
             title={creatingSession ? "Quiz wird vorbereitet..." : "Quiz starten"}
             onPress={onCreateSession}
             disabled={creatingSession}
-            textStyle={{ fontSize: fluid(20, 17, 20), fontWeight: "800" }}
+            textStyle={{ fontSize: fluidBetween(17, 20, "width"), fontWeight: "800" }}
           />
-        </View>
-      </View>
+        </HostActionBar>
+      </HostScreenContainer>
     </HostLayout>
   );
 }
