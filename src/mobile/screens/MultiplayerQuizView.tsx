@@ -295,7 +295,7 @@ export function MultiplayerQuizView({
             {!!correctAnswer && (
               <>
                 <BBButton
-                  title={playerContinued ? "Warten auf andere..." : "Weiter"}
+                  title={playerContinued ? "Warten auf andere..." : "Nächste Frage"}
                   onPress={onContinue}
                   disabled={playerContinued}
                 />

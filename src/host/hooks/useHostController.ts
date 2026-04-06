@@ -12,6 +12,8 @@ import {
   consumeAuthResult,
   createQuizSession,
   getChoosePlaylists,
+  getHostSpotifyStatus,
+  type HostSpotifyStatus,
   startSpotifyAuth,
 } from "../../shared/net/beatbrainApi";
 import { getStoredHostJwt, setStoredHostJwt } from "../../shared/net/authStorage";
@@ -22,7 +24,9 @@ import {
   getPreferredHostRoundPlaybackMode,
   playHostTrackWithWebSdkFallback,
   primeHostSpotifyWebPlayback,
+  warmHostSpotifyWebPlayback,
 } from "../services/spotifyHostPlayback";
+import { getHostPlaybackErrorMessage } from "../services/hostPlaybackErrorMessage";
 
 type HostScreen =
   | "start"
@@ -244,7 +248,7 @@ function readExceptionMessage(payload: unknown) {
       return value.message[0];
     }
   }
-  return "Socket request failed.";
+  return "Socket-Anfrage fehlgeschlagen.";
 }
 
 function toMessage(error: unknown, fallback: string) {
@@ -259,6 +263,51 @@ function toMessage(error: unknown, fallback: string) {
 
 function isInvalidStoredHostJwtError(error: unknown) {
   return error instanceof ApiHttpError && error.status === 401;
+}
+
+function getHostSpotifyReconnectMessage(status?: HostSpotifyStatus | null) {
+  if (!status) {
+    return "Die Spotify-Verbindung des Hosts erlaubt aktuell kein Browser-Playback. Bitte den Host-Browser erneut mit Spotify verbinden.";
+  }
+
+  if (status.missingPremium) {
+    return "Browser-Playback im Host-Modus benötigt Spotify Premium auf dem Host-Account.";
+  }
+
+  if (status.missingPlaybackScope) {
+    return "Die aktuelle Spotify-Anmeldung erlaubt das Laden von Playlists, aber noch kein Browser-Playback. Bitte den Host-Browser erneut mit Spotify verbinden.";
+  }
+
+  if (status.needsReconnect || !status.connected) {
+    return "Die Spotify-Verbindung des Hosts ist nicht mehr gültig. Bitte den Host-Browser erneut mit Spotify verbinden.";
+  }
+
+  return status.message || "Spotify-Browser-Playback ist aktuell nicht bereit.";
+}
+
+function logHostPlaybackUiState(state: string, details?: Record<string, unknown>) {
+  if (!__DEV__) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[host-playback] ui:state:${state}`, details);
+    return;
+  }
+
+  console.info(`[host-playback] ui:state:${state}`);
+}
+
+function getBlockingHostSpotifyStatusMessage(status?: HostSpotifyStatus | null) {
+  if (!status) {
+    return null;
+  }
+
+  if (status.webPlaybackStatus === "blocked") {
+    return getHostSpotifyReconnectMessage(status);
+  }
+
+  return null;
 }
 
 function getHostWebStorage(): Storage | null {
@@ -325,6 +374,8 @@ export function useHostController() {
   const [hostJwt, setHostJwt] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [spotifyStatus, setSpotifyStatus] = useState<HostSpotifyStatus | null>(null);
+  const [spotifyStatusLoading, setSpotifyStatusLoading] = useState(false);
 
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [question, setQuestion] = useState<QuizQuestion | null>(null);
@@ -382,13 +433,14 @@ export function useHostController() {
     }
 
     if (trackCount === 0) {
-      return "Diese BeatBrain-Playlist enthaelt aktuell noch keine spielbaren Tracks.";
+      return "Diese BeatBrain-Playlist enthält aktuell noch keine spielbaren Tracks.";
     }
 
-    return `Diese BeatBrain-Playlist enthaelt aktuell nur ${trackCount} Tracks. Fuer ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benoetigt.`;
+    return `Diese BeatBrain-Playlist enthält aktuell nur ${trackCount} Tracks. Für ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benötigt.`;
   }, [questionCount, requiredPlaylistTrackCount, selectedPlaylist]);
 
   const hasAuth = Boolean(hostJwt);
+  const spotifyPlaybackReady = spotifyStatus?.canUseWebPlayback ?? null;
   const totalPlayers = lobby?.players.length ?? 0;
   const readyCount = lobby?.players.filter((player) => player.readyForNext).length ?? 0;
 
@@ -443,11 +495,81 @@ export function useHostController() {
     [hostJwt],
   );
 
-  const primeHostPlayback = useCallback(() => {
+  const refreshSpotifyStatus = useCallback(async () => {
+    if (!hostJwt) {
+      setSpotifyStatus(null);
+      return null;
+    }
+
+    logHostPlaybackUiState("status:load:start");
+    setSpotifyStatusLoading(true);
+    try {
+      const nextStatus = await getHostSpotifyStatus(apiContext);
+      logHostPlaybackUiState("status:load:result", {
+        webPlaybackStatus: nextStatus.webPlaybackStatus,
+        scopeStatus: nextStatus.scopeStatus,
+        needsReconnect: nextStatus.needsReconnect,
+        missingPremium: nextStatus.missingPremium,
+        missingPlaybackScope: nextStatus.missingPlaybackScope,
+      });
+      setSpotifyStatus(nextStatus);
+      return nextStatus;
+    } catch (error) {
+      if (isInvalidStoredHostJwtError(error)) {
+        setPersistedHostJwt(null);
+        setSpotifyStatus(null);
+        return null;
+      }
+
+      const fallbackStatus: HostSpotifyStatus = {
+        connected: false,
+        canUseWebPlayback: null,
+        needsReconnect: false,
+        missingPremium: false,
+        missingPlaybackScope: false,
+        scopeStatus: "unknown",
+        webPlaybackStatus: "unknown",
+        message: toMessage(
+          error,
+          "Spotify-Status konnte gerade nicht geprüft werden.",
+        ),
+      };
+      logHostPlaybackUiState("status:load:error", {
+        message: fallbackStatus.message,
+      });
+      setSpotifyStatus(fallbackStatus);
+      return fallbackStatus;
+    } finally {
+      setSpotifyStatusLoading(false);
+    }
+  }, [apiContext, hostJwt]);
+
+  const primeHostPlayback = useCallback(async () => {
+    if (Platform.OS !== "web" || !hostJwt) {
+      return {
+        ok: false,
+        code: "auth",
+        message: "Bitte den Host zuerst mit Spotify verbinden.",
+      };
+    }
+    logHostPlaybackUiState("prime:start");
+    const result = await primeHostSpotifyWebPlayback(apiContext);
+    logHostPlaybackUiState(result.ok ? "prime:ok" : "prime:fail", {
+      ...(result.ok
+        ? { deviceId: result.deviceId ?? null }
+        : { code: result.code, message: result.message }),
+    });
+    return result;
+  }, [apiContext, hostJwt]);
+
+  const warmHostPlayback = useCallback(async () => {
     if (Platform.OS !== "web" || !hostJwt) {
       return;
     }
-    void primeHostSpotifyWebPlayback(apiContext);
+
+    logHostPlaybackUiState("warm:start");
+    await warmHostSpotifyWebPlayback(apiContext);
+    logHostPlaybackUiState("warm:done");
   }, [apiContext, hostJwt]);
 
   const startQuestionPlayback = useCallback(
@@ -472,10 +594,16 @@ export function useHostController() {
       }
 
       if (!result.ok) {
+        logHostPlaybackUiState("round:playback:failed", {
+          message: result.message,
+        });
         setPlaybackError(result.message);
         return;
       }
 
+      logHostPlaybackUiState("round:playback:ok", {
+        mode: result.mode,
+      });
       setPlaybackError(null);
     },
     [apiContext],
@@ -733,6 +861,7 @@ export function useHostController() {
     });
 
     socket.on("round:question", (payload: { question?: QuizQuestion }) => {
+      logHostPlaybackUiState("round:question");
       setActionBusy(false);
       setSocketError(null);
       const nextQuestion = payload.question ?? null;
@@ -764,7 +893,12 @@ export function useHostController() {
     });
 
     socket.on("round:playbackError", (payload: { message?: string }) => {
-      setPlaybackError(payload?.message?.trim() || "Spotify playback failed.");
+      logHostPlaybackUiState("round:playback:error", {
+        message: payload?.message?.trim() || "Spotify playback failed.",
+      });
+      setPlaybackError(
+        getHostPlaybackErrorMessage(payload?.message?.trim() || "Spotify playback failed."),
+      );
     });
 
     socket.on("game:ended", (state: LobbyState) => {
@@ -797,7 +931,7 @@ export function useHostController() {
     });
 
     socket.on("exception", (payload: unknown) => {
-      const message = readExceptionMessage(payload);
+      const message = getHostPlaybackErrorMessage(readExceptionMessage(payload));
       setCreatingLobby(false);
       setCreatingSession(false);
       setActionBusy(false);
@@ -805,7 +939,7 @@ export function useHostController() {
     });
 
     socket.on("connect_error", (error: Error) => {
-      setSocketError(error.message || "Socket connection failed.");
+      setSocketError(error.message || "Socket-Verbindung fehlgeschlagen.");
       setCreatingLobby(false);
       setActionBusy(false);
     });
@@ -834,7 +968,7 @@ export function useHostController() {
 
       window.location.assign(authorizeUrl);
     } catch (error) {
-      setAuthError(toMessage(error, "Spotify login failed."));
+      setAuthError(toMessage(error, "Spotify-Login fehlgeschlagen."));
       setAuthBusy(false);
     }
   };
@@ -845,7 +979,7 @@ export function useHostController() {
       return;
     }
 
-    primeHostPlayback();
+    void warmHostPlayback();
     setSocketError(null);
     setCreatingLobby(true);
     const socket = connectSocket();
@@ -875,15 +1009,18 @@ export function useHostController() {
     navigateToScreen("lobby", { mode: "push" });
   };
 
-  const emitStartRound = (sessionId: string) => {
+  const emitStartRound = async (sessionId: string) => {
     if (!hostJwt || !lobby?.joinCode) {
       setSetupError("Lobby nicht bereit.");
-      return;
+      return false;
     }
 
-    primeHostPlayback();
     setActionBusy(true);
     setSocketError(null);
+    logHostPlaybackUiState("round:start:emit", {
+      joinCode: lobby.joinCode,
+      playbackMode: getPreferredHostRoundPlaybackMode(),
+    });
     const socket = connectSocket();
     socket.emit("host:startRound", {
       hostJwt,
@@ -892,6 +1029,7 @@ export function useHostController() {
       timerMs: 30_000,
       playbackMode: getPreferredHostRoundPlaybackMode(),
     });
+    return true;
   };
 
   const createSessionForPlaylist = async (playlistId: string, decadeTag?: string) => {
@@ -900,10 +1038,30 @@ export function useHostController() {
       setSetupError("Bitte eine Playlist wählen.");
       return;
     }
-    primeHostPlayback();
     setCreatingSession(true);
     setSetupError(null);
     setSocketError(null);
+    logHostPlaybackUiState("quiz:start:click", {
+      playlistId: normalizedPlaylistId,
+      decadeTag: decadeTag ?? null,
+      questionCount: clampQuestionCount(questionCount),
+    });
+    const preferredSetupScreen =
+      screen === "setupCreate" ? "setupCreate" : "setupChoose";
+    if (getPreferredHostRoundPlaybackMode() === "host_web_sdk") {
+      const primeResult = await primeHostPlayback();
+      if (!primeResult.ok) {
+        const status = await refreshSpotifyStatus();
+        const blockingStatusMessage = getBlockingHostSpotifyStatusMessage(status);
+        setSetupError(
+          blockingStatusMessage ??
+            primeResult.message ??
+            "Spotify-Browser-Playback konnte nicht vorbereitet werden.",
+        );
+        setCreatingSession(false);
+        return;
+      }
+    }
     try {
       const data = await createQuizSession(apiContext, {
         playlistId: normalizedPlaylistId,
@@ -918,11 +1076,14 @@ export function useHostController() {
       setQuestion(null);
       setCorrectAnswer(null);
       resetRoundFlags();
-      setPreferredLobbyScreen("setupMode");
-      navigateToScreen("quiz", { mode: "push" });
-      emitStartRound(sessionId);
+      setPreferredLobbyScreen(preferredSetupScreen);
+      await emitStartRound(sessionId);
     } catch (error) {
-      setSetupError(toMessage(error, "Quiz session could not be created."));
+      setSetupError(
+        getHostPlaybackErrorMessage(
+          error instanceof Error ? error : toMessage(error, "Quiz-Session konnte nicht erstellt werden."),
+        ),
+      );
     } finally {
       setCreatingSession(false);
     }
@@ -955,7 +1116,7 @@ export function useHostController() {
       return;
     }
 
-    primeHostPlayback();
+    void warmHostPlayback();
     setActionBusy(true);
     setPreferredLobbyScreen("setupMode");
     setSocketError(null);
@@ -1037,6 +1198,16 @@ export function useHostController() {
   }, []);
 
   useEffect(() => {
+    if (!hasAuth) {
+      setSpotifyStatus(null);
+      setSpotifyStatusLoading(false);
+      return;
+    }
+
+    void refreshSpotifyStatus();
+  }, [hasAuth, refreshSpotifyStatus]);
+
+  useEffect(() => {
     if (Platform.OS !== "web") {
       return;
     }
@@ -1046,8 +1217,8 @@ export function useHostController() {
       return;
     }
 
-    void primeHostSpotifyWebPlayback(apiContext);
-  }, [apiContext, hasAuth]);
+    void warmHostPlayback();
+  }, [hasAuth, warmHostPlayback]);
 
   useEffect(() => {
     if (!hasAuth) {
@@ -1079,7 +1250,7 @@ export function useHostController() {
         }));
         setPlaylists(cards);
         setSelectedPlaylistIndexState((index) => Math.max(0, Math.min(index, cards.length - 1)));
-        setPlaylistsError(cards.length ? null : "Keine kuratierten Playlists gefunden.");
+        setPlaylistsError(cards.length ? null : "Keine BeatBrain-Playlists gefunden.");
       } catch (error) {
         if (cancelled) {
           return;
@@ -1093,7 +1264,7 @@ export function useHostController() {
         setPlaylistsError(
           isInvalidStoredHostJwtError(error)
             ? "Spotify-Login abgelaufen. Bitte erneut verbinden."
-            : toMessage(error, "Kuratierte Playlists konnten nicht geladen werden."),
+            : toMessage(error, "BeatBrain-Playlists konnten nicht geladen werden."),
         );
 
         if (__DEV__ && !isInvalidStoredHostJwtError(error)) {
@@ -1127,7 +1298,7 @@ export function useHostController() {
 
     const consume = async () => {
       if (oauthError) {
-        setAuthError("Spotify login failed.");
+        setAuthError("Spotify-Login fehlgeschlagen.");
         return;
       }
 
@@ -1146,7 +1317,7 @@ export function useHostController() {
         setPersistedHostJwt(appJwt);
         setRouteNotice("Spotify verbunden. Session starten.");
       } catch (error) {
-        setAuthError(toMessage(error, "Spotify login failed."));
+        setAuthError(toMessage(error, "Spotify-Login fehlgeschlagen."));
       } finally {
         setAuthBusy(false);
       }
@@ -1216,6 +1387,9 @@ export function useHostController() {
     hasAuth,
     authBusy,
     authError,
+    spotifyStatus,
+    spotifyStatusLoading,
+    spotifyPlaybackReady,
     startSpotifyLogin,
 
     playlists: playlists as PlaylistCard[],

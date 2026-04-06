@@ -216,6 +216,18 @@ export function HostPreviewApp() {
         hasAuth
         authBusy={false}
         authError={null}
+        spotifyStatus={{
+          connected: true,
+          canUseWebPlayback: true,
+          needsReconnect: false,
+          missingPremium: false,
+          missingPlaybackScope: false,
+          scopeStatus: "granted",
+          webPlaybackStatus: "ready",
+          message: "Spotify ist für Browser-Playback bereit.",
+        }}
+        spotifyStatusLoading={false}
+        spotifyPlaybackReady
         creatingLobby={false}
         socketError={null}
         onLogin={() => {}}

@@ -23,9 +23,9 @@ function normalizeQuestionCount(value: number) {
 }
 
 const SPEED_HINTS = [
-  "10-20 fuer schnelle Runden",
-  "30-50 fuer den Hauptmodus",
-  "60+ nur fuer lange Sessions",
+  "10-20 für schnelle Runden",
+  "30-50 für den Hauptmodus",
+  "60+ nur für lange Sessions",
 ];
 
 export function HostSetupModeScreen({
@@ -108,8 +108,8 @@ export function HostSetupModeScreen({
         <HostResponsiveGrid minItemWidth={280} maxColumns={2} gap={space.lg}>
           <ModeCard
             title="Kuratiert starten"
-            description="Spotify-Playlists laden, am Big Screen auswaehlen und direkt mit der Session verbinden."
-            cta="Aus Playlists waehlen"
+            description="Spotify-Playlists laden, am Big Screen auswählen und direkt mit der Session verbinden."
+            cta="Aus Playlists wählen"
             onPress={onChooseMode}
           />
           <ModeCard

@@ -13,6 +13,18 @@ export type SpotifyPlayerDevice = {
   is_active: boolean;
 };
 
+export type HostSpotifyStatus = {
+  connected: boolean;
+  canUseWebPlayback: boolean | null;
+  needsReconnect: boolean;
+  missingPremium: boolean;
+  missingPlaybackScope: boolean;
+  scopeStatus: "granted" | "missing" | "unknown";
+  webPlaybackStatus: "ready" | "blocked" | "unknown";
+  product?: string;
+  message: string;
+};
+
 type AuthRequestOptions = {
   redirectOrigin?: string;
   baseUrl?: string;
@@ -81,6 +93,37 @@ export async function getSpotifySdkAccessToken(context: ApiClientContext) {
   };
 }
 
+export async function getHostSpotifyStatus(
+  context: ApiClientContext,
+): Promise<HostSpotifyStatus> {
+  const payload = (await requestJson(context, "/auth/spotify/status", {
+    method: "GET",
+  })) as JsonRecord;
+
+  return {
+    connected: Boolean(payload?.connected),
+    canUseWebPlayback:
+      typeof payload?.canUseWebPlayback === "boolean" ? payload.canUseWebPlayback : null,
+    needsReconnect: Boolean(payload?.needsReconnect),
+    missingPremium: Boolean(payload?.missingPremium),
+    missingPlaybackScope: Boolean(payload?.missingPlaybackScope),
+    scopeStatus:
+      payload?.scopeStatus === "granted" ||
+      payload?.scopeStatus === "missing" ||
+      payload?.scopeStatus === "unknown"
+        ? payload.scopeStatus
+        : "unknown",
+    webPlaybackStatus:
+      payload?.webPlaybackStatus === "ready" ||
+      payload?.webPlaybackStatus === "blocked" ||
+      payload?.webPlaybackStatus === "unknown"
+        ? payload.webPlaybackStatus
+        : "unknown",
+    product: String(payload?.product ?? "").trim() || undefined,
+    message: String(payload?.message ?? "").trim(),
+  };
+}
+
 export async function startSpotifyPlayback(
   context: ApiClientContext,
   payload: { trackUri: string; deviceId?: string; positionMs?: number },
@@ -93,6 +136,16 @@ export async function playSpotifyTrack(
   payload: { trackUri: string; deviceId?: string; positionMs?: number },
 ) {
   return requestJson(context, "/spotify/player/play", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function transferSpotifyPlayback(
+  context: ApiClientContext,
+  payload: { deviceId: string; play?: boolean },
+) {
+  return requestJson(context, "/spotify/player/transfer", {
     method: "PUT",
     body: JSON.stringify(payload),
   });

@@ -17,6 +17,9 @@ export function HostApp() {
         hasAuth={app.hasAuth}
         authBusy={app.authBusy}
         authError={app.authError}
+        spotifyStatus={app.spotifyStatus}
+        spotifyStatusLoading={app.spotifyStatusLoading}
+        spotifyPlaybackReady={app.spotifyPlaybackReady}
         creatingLobby={app.creatingLobby}
         socketError={app.socketError}
         onLogin={app.startSpotifyLogin}

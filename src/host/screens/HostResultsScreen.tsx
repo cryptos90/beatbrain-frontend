@@ -57,7 +57,7 @@ export function HostResultsScreen({
             }}
           >
             {sortedPlayers.length > 0
-              ? `${sortedPlayers[0].name} fuehrt die Runde an`
+              ? `${sortedPlayers[0].name} führt die Runde an`
               : "Ergebnisse werden geladen"}
           </Text>
         </HostPanel>
@@ -139,7 +139,7 @@ export function HostResultsScreen({
             textStyle={{ fontSize: fluidBetween(17, 19, "width"), fontWeight: "800" }}
           />
           <HostActionButton
-            title={actionBusy ? "Bitte warten..." : "Zurueck zur Lobby"}
+            title={actionBusy ? "Bitte warten..." : "Zurück zur Lobby"}
             onPress={onReturnToMenu}
             disabled={actionBusy}
             textStyle={{ fontSize: fluidBetween(17, 19, "width"), fontWeight: "800" }}

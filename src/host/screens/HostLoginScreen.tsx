@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Colors } from "../../theme";
+import type { HostSpotifyStatus } from "../../shared/net/beatbrainApi";
 import { HostActionBar } from "../components/HostActionBar";
 import { HostActionButton } from "../components/HostActionButton";
 import { HostLayout } from "../components/HostLayout";
@@ -13,6 +14,9 @@ type Props = {
   hasAuth: boolean;
   authBusy: boolean;
   authError: string | null;
+  spotifyStatus: HostSpotifyStatus | null;
+  spotifyStatusLoading: boolean;
+  spotifyPlaybackReady: boolean | null;
   creatingLobby: boolean;
   socketError: string | null;
   onLogin: () => void;
@@ -28,13 +32,13 @@ const LOGIN_STEPS = [
   },
   {
     step: "2",
-    title: "Session oeffnen",
-    text: "Der grosse Bildschirm zeigt Join-Code und QR-Code.",
+    title: "Session öffnen",
+    text: "Der große Bildschirm zeigt Join-Code und QR-Code.",
   },
   {
     step: "3",
     title: "Lesbar moderieren",
-    text: "Fragen, Timer und Aufloesung bleiben auf jedem Browserfenster im Fokus.",
+    text: "Fragen, Timer und Auflösung bleiben auf jedem Browserfenster im Fokus.",
   },
 ];
 
@@ -42,6 +46,9 @@ export function HostLoginScreen({
   hasAuth,
   authBusy,
   authError,
+  spotifyStatus,
+  spotifyStatusLoading,
+  spotifyPlaybackReady,
   creatingLobby,
   socketError,
   onLogin,
@@ -66,8 +73,33 @@ export function HostLoginScreen({
   const stepTitleSize = fluidBetween(16, 20, "width");
   const stepBodySize = typeScale.bodySm;
   const buttonFontSize = fluidBetween(16, 20, "width");
-  const loginLabel = hasAuth ? "Mit Spotify verbunden" : "Mit Spotify verbinden";
+  const playbackBlocked = hasAuth && spotifyStatus?.webPlaybackStatus === "blocked";
+  const playbackUnknown = hasAuth && spotifyStatus?.webPlaybackStatus === "unknown";
+  const reconnectRequired = playbackBlocked;
+  const loginLabel = reconnectRequired
+    ? "Spotify erneut verbinden"
+    : hasAuth
+      ? "Mit Spotify verbunden"
+      : "Mit Spotify verbinden";
   const startLabel = creatingLobby ? "Session wird erstellt..." : "Host-Session starten";
+  const statusTitle = !hasAuth
+    ? "Noch nicht verbunden"
+    : spotifyStatusLoading
+      ? "Spotify wird geprüft"
+      : playbackBlocked
+        ? "Spotify neu verbinden"
+        : "Spotify verbunden";
+  const statusDescription = !hasAuth
+    ? "Verbinde zuerst Spotify, damit Playlists geladen und Sessions gestartet werden können."
+    : spotifyStatusLoading
+      ? "Die aktuelle Spotify-Anmeldung wird gerade für Browser-Playback geprüft."
+      : playbackBlocked
+        ? spotifyStatus?.message ||
+          "Die aktuelle Spotify-Anmeldung erlaubt noch kein Host-Browser-Playback. Bitte erneut verbinden."
+        : playbackUnknown
+          ? spotifyStatus?.message ||
+            "Spotify ist verbunden. Browser-Playback wird beim Quizstart im Browser verifiziert."
+          : "Spotify ist verbunden und für Browser-Playback im Host-Modus bereit.";
 
   return (
     <HostLayout
@@ -171,7 +203,12 @@ export function HostLoginScreen({
             <View
               style={{
                 borderRadius: radii.lg,
-                backgroundColor: hasAuth ? "rgba(22,163,74,0.14)" : "rgba(32,44,89,0.08)",
+                backgroundColor:
+                  !hasAuth || spotifyStatusLoading
+                    ? "rgba(32,44,89,0.08)"
+                    : playbackBlocked
+                      ? "rgba(234,179,8,0.18)"
+                      : "rgba(22,163,74,0.14)",
                 paddingHorizontal: space.lg,
                 paddingVertical: isCompactHeight ? space.md : space.lg,
                 gap: space.xs,
@@ -185,7 +222,7 @@ export function HostLoginScreen({
                   textAlign: "center",
                 }}
               >
-                {hasAuth ? "Spotify verbunden" : "Noch nicht verbunden"}
+                {statusTitle}
               </Text>
               <Text
                 style={{
@@ -196,13 +233,11 @@ export function HostLoginScreen({
                   textAlign: "center",
                 }}
               >
-                {hasAuth
-                  ? "Spotify ist verbunden. Die Session kann jetzt gestartet werden."
-                  : "Verbinde zuerst Spotify, damit Playlists geladen und Sessions gestartet werden koennen."}
+                {statusDescription}
               </Text>
             </View>
 
-            {authBusy && (
+            {(authBusy || spotifyStatusLoading) && (
               <View style={{ alignItems: "center", gap: space.sm }}>
                 <ActivityIndicator size={36 as any} color={Colors.navy} />
                 <Text
@@ -213,7 +248,7 @@ export function HostLoginScreen({
                     textAlign: "center",
                   }}
                 >
-                  Warte auf Spotify-Login...
+                  {authBusy ? "Warte auf Spotify-Login..." : "Spotify-Berechtigung wird geprüft..."}
                 </Text>
               </View>
             )}
@@ -222,13 +257,13 @@ export function HostLoginScreen({
               <HostActionButton
                 title={loginLabel}
                 onPress={onLogin}
-                disabled={authBusy || hasAuth}
+                disabled={authBusy || (hasAuth && !playbackBlocked && !spotifyStatusLoading)}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
               <HostActionButton
                 title={startLabel}
                 onPress={onStartSession}
-                disabled={!hasAuth || creatingLobby || authBusy}
+                disabled={!hasAuth || creatingLobby || authBusy || spotifyStatusLoading || playbackBlocked}
                 textStyle={{ fontSize: buttonFontSize, fontWeight: "800" }}
               />
             </HostActionBar>

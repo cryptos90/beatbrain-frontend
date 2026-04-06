@@ -1,12 +1,21 @@
-import React from "react";
-import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { Colors } from "../../theme";
 import type { PlaylistCard } from "../../shared/types/app";
 import { HostActionBar } from "../components/HostActionBar";
 import { HostActionButton } from "../components/HostActionButton";
 import { HostLayout } from "../components/HostLayout";
 import { HostPanel } from "../components/HostPanel";
-import { HostResponsiveGrid } from "../components/HostResponsiveGrid";
 import { HostScreenContainer } from "../components/HostScreenContainer";
 import { useHostViewport } from "../hooks/useHostViewport";
 
@@ -48,53 +57,90 @@ export function HostChoosePlaylistScreen({
   const selectedPlaylist = playlists[selectedPlaylistIndex] ?? null;
   const disableStart =
     creatingSession || loading || !selectedPlaylist || Boolean(startDisabledReason);
-  const useCompactSummary = isCompactHeight || height < 960;
+  const compactCarouselCards = isCompactHeight || height < 1100;
+  const stageGap = compactCarouselCards ? space.sm : space.md;
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
+
+  const itemGap = width <= 479 ? space.xs : compactCarouselCards ? space.sm : space.md;
+  const cardWidth = useMemo(() => {
+    const availableWidth = Math.max(carouselWidth, width * 0.7);
+    const preferred =
+      width <= 767
+        ? availableWidth * 0.7
+        : width <= 1023
+          ? availableWidth * 0.48
+          : compactCarouselCards
+            ? availableWidth * 0.33
+            : availableWidth * 0.36;
+    const minWidth = width <= 479 ? 204 : width <= 767 ? 228 : compactCarouselCards ? 248 : 272;
+    const maxWidth = width <= 767 ? 308 : width <= 1279 ? 382 : 418;
+    return Math.round(Math.min(maxWidth, Math.max(minWidth, preferred)));
+  }, [carouselWidth, compactCarouselCards, width]);
+  const itemExtent = cardWidth + itemGap;
+  const sideInset = Math.max(0, Math.round((carouselWidth - cardWidth) / 2));
+  const coverAspectRatio =
+    width <= 767 ? 1.2 : compactCarouselCards ? 1.38 : height < 1280 ? 1.26 : 1.18;
+
+  const scrollToIndex = useCallback(
+    (index: number, animated: boolean) => {
+      if (!scrollRef.current || !playlists.length) {
+        return;
+      }
+      const clamped = Math.max(0, Math.min(index, playlists.length - 1));
+      scrollRef.current.scrollTo({
+        x: clamped * itemExtent,
+        y: 0,
+        animated,
+      });
+    },
+    [itemExtent, playlists.length],
+  );
+
+  const selectIndex = useCallback(
+    (index: number, animated = true) => {
+      const clamped = Math.max(0, Math.min(index, playlists.length - 1));
+      onSelectPlaylistIndex(clamped);
+      scrollToIndex(clamped, animated);
+    },
+    [onSelectPlaylistIndex, playlists.length, scrollToIndex],
+  );
+
+  const handleCarouselLayout = useCallback((event: LayoutChangeEvent) => {
+    setCarouselWidth(Math.max(0, Math.round(event.nativeEvent.layout.width)));
+  }, []);
+
+  const handleMomentumEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!playlists.length) {
+        return;
+      }
+
+      const offsetX = event.nativeEvent.contentOffset.x;
+      const nextIndex = Math.round(offsetX / Math.max(1, itemExtent));
+      const clamped = Math.max(0, Math.min(nextIndex, playlists.length - 1));
+      if (clamped !== selectedPlaylistIndex) {
+        onSelectPlaylistIndex(clamped);
+      }
+    },
+    [itemExtent, onSelectPlaylistIndex, playlists.length, selectedPlaylistIndex],
+  );
+
+  useEffect(() => {
+    if (!carouselWidth || !playlists.length) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      scrollToIndex(selectedPlaylistIndex, false);
+    }, 0);
+
+    return () => clearTimeout(timeout);
+  }, [carouselWidth, playlists.length, scrollToIndex, selectedPlaylistIndex]);
 
   return (
-    <HostLayout maxWidth={contentMax.stage} notice={notice} headerEyebrow="Playlist Auswahl">
-      <HostScreenContainer>
-        <HostPanel
-          tone="glass"
-          padding={isCompactHeight ? "sm" : "md"}
-          maxWidth={contentMax.medium}
-        >
-          <Text
-            style={{
-              color: Colors.textOnBg,
-              fontSize: fluidBetween(isCompactHeight ? 20 : 22, isCompactHeight ? 26 : 28, "width"),
-              fontWeight: "900",
-              textAlign: "center",
-            }}
-          >
-            Playlist waehlen
-          </Text>
-          <Text
-            style={{
-              color: "rgba(32,44,89,0.84)",
-              fontSize: typeScale.bodySm,
-              lineHeight: typeScale.bodySm + 7,
-              fontWeight: "600",
-              textAlign: "center",
-            }}
-          >
-            {loading
-              ? "Kuratierte BeatBrain-Playlists werden geladen..."
-              : selectedPlaylist
-                ? selectedPlaylist.title
-                : "Waehle eine lokale BeatBrain-Kategorie aus."}
-          </Text>
-          {useCompactSummary && (
-            <HostActionBar maxWidth={contentMax.compact} gap={space.sm}>
-              <HostActionButton
-                title={creatingSession ? "Quiz wird vorbereitet..." : "Diese Playlist starten"}
-                onPress={onCreateSession}
-                disabled={disableStart}
-                textStyle={{ fontSize: fluidBetween(16, 19, "width"), fontWeight: "800" }}
-              />
-            </HostActionBar>
-          )}
-        </HostPanel>
-
+    <HostLayout maxWidth={contentMax.stage} notice={notice} headerEyebrow="Playlist-Auswahl">
+      <HostScreenContainer gap={stageGap}>
         {loading ? (
           <StatusCard>
             <ActivityIndicator color={Colors.navy} size={36 as any} />
@@ -110,82 +156,100 @@ export function HostChoosePlaylistScreen({
             </Text>
           </StatusCard>
         ) : playlists.length > 0 ? (
-          <HostResponsiveGrid
-            minItemWidth={
-              width <= 479
-                ? 150
-                : width <= 767
-                  ? 176
-                  : isCompactHeight
-                    ? 196
-                    : 220
-            }
-            maxColumns={width >= 1600 ? 5 : 4}
-            gap={isCompactHeight ? space.md : space.lg}
-          >
-            {playlists.map((item, index) => {
-              const selected = selectedPlaylistIndex === index;
-              return (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => onSelectPlaylistIndex(index)}
-                  style={({ pressed }) => ({
-                    height: "100%",
-                    opacity: pressed ? 0.9 : 1,
-                    backgroundColor: selected ? Colors.navy : "rgba(255,255,255,0.78)",
-                    borderRadius: radii.xl,
-                    padding: isCompactHeight ? space.xs : space.sm,
-                    borderWidth: selected ? 2 : 1,
-                    borderColor: selected ? Colors.textOnNavy : "rgba(32,44,89,0.12)",
-                    gap: isCompactHeight ? space.xs : space.sm,
-                  })}
-                >
-                  <Image
-                    source={
-                      item.imageUrl
-                        ? { uri: item.imageUrl }
-                        : require("../../../assets/logo.png")
-                    }
-                    resizeMode="cover"
-                    style={{
-                      width: "100%",
-                      aspectRatio: useCompactSummary ? 1.35 : isCompactHeight ? 1.2 : 1,
-                      borderRadius: radii.lg,
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                    }}
-                  />
+          <View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: width <= 767 ? space.xs : compactCarouselCards ? space.xs : space.sm,
+              }}
+            >
+              <CarouselArrowButton
+                direction="left"
+                disabled={selectedPlaylistIndex <= 0}
+                onPress={() => selectIndex(selectedPlaylistIndex - 1)}
+              />
 
-                  <View style={{ gap: space.xs }}>
-                    <Text
-                      numberOfLines={2}
-                      style={{
-                        color: selected ? Colors.textOnNavy : Colors.textOnBg,
-                        fontSize: fluidBetween(15, 18, "width"),
-                        fontWeight: "900",
-                        textAlign: "center",
-                      }}
-                    >
-                      {item.title}
-                    </Text>
-                    {typeof item.trackCount === "number" && (
-                      <Text
-                        style={{
-                          color: selected ? "rgba(255,255,255,0.86)" : "rgba(32,44,89,0.72)",
-                          fontSize: typeScale.bodySm,
-                          fontWeight: "700",
-                          textAlign: "center",
-                        }}
+              <View style={{ flex: 1 }} onLayout={handleCarouselLayout}>
+                <ScrollView
+                  ref={scrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  bounces={false}
+                  decelerationRate="fast"
+                  snapToInterval={itemExtent}
+                  snapToAlignment="start"
+                  onMomentumScrollEnd={handleMomentumEnd}
+                  contentContainerStyle={{
+                    paddingHorizontal: sideInset,
+                    paddingVertical: compactCarouselCards ? 0 : space.xxs,
+                    gap: itemGap,
+                  }}
+                >
+                  {playlists.map((item, index) => {
+                    const selected = selectedPlaylistIndex === index;
+                    const distance = Math.abs(index - selectedPlaylistIndex);
+                    const scale = selected ? 1 : distance === 1 ? 0.93 : 0.88;
+                    const opacity = selected ? 1 : distance === 1 ? 0.9 : 0.74;
+
+                    return (
+                      <Pressable
+                        key={item.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => selectIndex(index)}
+                        style={({ pressed }) => ({
+                          width: cardWidth,
+                          opacity: pressed ? 0.96 : opacity,
+                          transform: [{ scale }],
+                        })}
                       >
-                        {item.trackCount} Tracks
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </HostResponsiveGrid>
+                        <View
+                          style={{
+                            backgroundColor: selected ? Colors.navy : "rgba(255,255,255,0.8)",
+                            borderRadius: radii.xl,
+                            padding: compactCarouselCards ? space.xs : space.sm,
+                            gap: compactCarouselCards ? space.xxs : space.xs,
+                            borderWidth: selected ? 3 : 1,
+                            borderColor: selected
+                              ? "rgba(255,255,255,0.9)"
+                              : "rgba(32,44,89,0.14)",
+                            shadowColor: "#000",
+                            shadowOpacity: selected ? 0.18 : 0.08,
+                            shadowRadius: selected ? 16 : 8,
+                            shadowOffset: { width: 0, height: selected ? 12 : 5 },
+                          }}
+                        >
+                          <Image
+                            source={
+                              item.imageUrl
+                                ? { uri: item.imageUrl }
+                                : require("../../../assets/logo.png")
+                            }
+                            resizeMode="cover"
+                            style={{
+                              width: "100%",
+                              aspectRatio: coverAspectRatio,
+                              borderRadius: radii.lg,
+                              backgroundColor: "rgba(255,255,255,0.1)",
+                            }}
+                          />
+
+                          
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <CarouselArrowButton
+                direction="right"
+                disabled={selectedPlaylistIndex >= playlists.length - 1}
+                onPress={() => selectIndex(selectedPlaylistIndex + 1)}
+              />
+            </View>
+          </View>
         ) : (
           <StatusCard>
             <Text
@@ -196,40 +260,79 @@ export function HostChoosePlaylistScreen({
                 textAlign: "center",
               }}
             >
-              Keine Playlists verfuegbar.
+              Keine BeatBrain-Playlists verfügbar.
             </Text>
           </StatusCard>
         )}
 
-        {!useCompactSummary && (
-          <HostPanel tone="navy" maxWidth={contentMax.medium}>
+        {playlists.length > 0 && (
+          <HostPanel
+            tone="glass"
+            padding="sm"
+            gap={compactCarouselCards ? space.xs : space.sm}
+            maxWidth={contentMax.compact}
+          >
             <Text
               style={{
-                color: "rgba(46,196,182,0.86)",
-                fontSize: typeScale.label,
-                fontWeight: "900",
-                textTransform: "uppercase",
-                letterSpacing: 1.1,
-                textAlign: "center",
-              }}
-            >
-              Aktive Auswahl
-            </Text>
-            <Text
-              style={{
-                color: Colors.textOnNavy,
-                fontSize: fluidBetween(22, 30, "width"),
-                lineHeight: fluidBetween(26, 34, "width"),
+                color: Colors.textOnBg,
+                fontSize: fluidBetween(24, compactCarouselCards ? 32 : 36, "width"),
+                lineHeight: fluidBetween(28, compactCarouselCards ? 36 : 40, "width"),
                 fontWeight: "900",
                 textAlign: "center",
               }}
             >
-              {selectedPlaylist ? selectedPlaylist.title : "Bitte eine Playlist auswaehlen"}
+              {selectedPlaylist ? selectedPlaylist.title : "Bitte eine Playlist auswählen"}
             </Text>
+
+            {!!selectedPlaylist?.tags?.length && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: space.xs,
+                }}
+              >
+                {selectedPlaylist.tags.slice(0, 3).map((tag) => (
+                  <View
+                    key={`selected-${selectedPlaylist.id}-${tag}`}
+                    style={{
+                      borderRadius: radii.pill,
+                      paddingHorizontal: space.sm,
+                      paddingVertical: Math.max(4, space.xxs),
+                      backgroundColor: "rgba(32,44,89,0.08)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: Colors.textOnBg,
+                        fontSize: compactCarouselCards
+                          ? Math.max(10, typeScale.bodySm - 2)
+                          : Math.max(11, typeScale.bodySm - 1),
+                        fontWeight: "700",
+                        textAlign: "center",
+                      }}
+                    >
+                      {tag}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <HostActionBar maxWidth={contentMax.compact}>
+              <HostActionButton
+                title={creatingSession ? "Quiz wird vorbereitet..." : "Quiz starten"}
+                onPress={onCreateSession}
+                disabled={disableStart}
+                textStyle={{ fontSize: fluidBetween(15, 18, "width"), fontWeight: "800" }}
+              />
+            </HostActionBar>
+
             {!!startDisabledReason && (
               <Text
                 style={{
-                  color: "rgba(255,255,255,0.82)",
+                  color: "rgba(32,44,89,0.82)",
                   fontSize: typeScale.bodySm,
                   lineHeight: typeScale.bodySm + 7,
                   fontWeight: "700",
@@ -239,15 +342,6 @@ export function HostChoosePlaylistScreen({
                 {startDisabledReason}
               </Text>
             )}
-            <HostActionBar maxWidth={contentMax.compact}>
-              <HostActionButton
-                title={creatingSession ? "Quiz wird vorbereitet..." : "Diese Playlist starten"}
-                onPress={onCreateSession}
-                disabled={disableStart}
-                invert
-                textStyle={{ fontSize: fluidBetween(17, 20, "width"), fontWeight: "800" }}
-              />
-            </HostActionBar>
           </HostPanel>
         )}
 
@@ -278,6 +372,47 @@ export function HostChoosePlaylistScreen({
         )}
       </HostScreenContainer>
     </HostLayout>
+  );
+}
+
+function CarouselArrowButton({
+  direction,
+  disabled,
+  onPress,
+}: {
+  direction: "left" | "right";
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const isLeft = direction === "left";
+  const chevronRotation = isLeft ? "225deg" : "45deg";
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isLeft ? "Vorherige Playlist" : "Nächste Playlist"}
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: Colors.navy,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.28 : pressed ? 0.84 : 1,
+      })}
+    >
+      <View
+        style={{
+          width: 12,
+          height: 12,
+          borderTopWidth: 3,
+          borderRightWidth: 3,
+          borderColor: Colors.textOnNavy,
+          transform: [{ rotate: chevronRotation }],
+        }}
+      />
+    </Pressable>
   );
 }
 

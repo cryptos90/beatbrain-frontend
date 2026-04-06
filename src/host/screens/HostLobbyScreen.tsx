@@ -21,10 +21,10 @@ type Props = {
 
 function stageStatusLabel(status: LobbyState["status"] | undefined) {
   if (status === "question") {
-    return "Frage laeuft";
+    return "Frage läuft";
   }
   if (status === "reveal") {
-    return "Aufloesung";
+    return "Auflösung";
   }
   if (status === "results") {
     return "Ergebnisse";

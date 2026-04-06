@@ -712,7 +712,7 @@ export function HostQuizScreen({
                         textAlign: viewportWidth >= 1180 ? "left" : "center",
                       }}
                     >
-                      Naechste Frage
+                      Nächste Frage
                     </Text>
                     <Text
                       style={{
@@ -763,7 +763,7 @@ export function HostQuizScreen({
                         textAlign: "center",
                       }}
                     >
-                      Naechste Frage
+                      Nächste Frage
                     </Text>
                     <Text
                       style={{

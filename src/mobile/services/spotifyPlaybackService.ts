@@ -13,7 +13,7 @@ type PlaybackResult =
   | { ok: false; message: string; canOpenSpotify: boolean };
 
 const NO_ACTIVE_DEVICE_HINT =
-  "Spotify ist auf diesem Geraet nicht als Wiedergabeziel aktiv. Oeffne Spotify auf diesem Geraet kurz, starte einen Song und versuche es erneut.";
+  "Spotify ist auf diesem Gerät nicht als Wiedergabeziel aktiv. Öffne Spotify auf diesem Gerät kurz, starte einen Song und versuche es erneut.";
 const LAST_SPOTIFY_DEVICE_ID_STORAGE_KEY = "beatbrain_last_spotify_device_id";
 const NO_ACTIVE_GRACE_DELAY_MS = 1200;
 
@@ -470,4 +470,3 @@ export async function playTrackWithMinimalSpotifyRequests(
     };
   }
 }
-

@@ -280,7 +280,7 @@ export function QuizView({
                   if (revealed) {
                     if (isCorrect) {
                       backgroundColor = "#16a34a";
-                    } else if (pressed) {
+                    } else {
                       backgroundColor = "#dc2626";
                     }
                   }
@@ -297,7 +297,7 @@ export function QuizView({
                         padding: 10,
                         alignItems: "center",
                         justifyContent: "center",
-                        opacity: revealed && !isCorrect && !pressed ? 0.7 : 1,
+                        opacity: 1,
                         minHeight: 170,
                         gap: 8,
                       }}

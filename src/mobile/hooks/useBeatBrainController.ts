@@ -297,10 +297,10 @@ export function useBeatBrainController() {
     }
 
     if (trackCount === 0) {
-      return "Diese BeatBrain-Playlist enthaelt aktuell noch keine spielbaren Tracks.";
+      return "Diese BeatBrain-Playlist enthält aktuell noch keine spielbaren Tracks.";
     }
 
-    return `Diese BeatBrain-Playlist enthaelt aktuell nur ${trackCount} Tracks. Fuer ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benoetigt.`;
+    return `Diese BeatBrain-Playlist enthält aktuell nur ${trackCount} Tracks. Für ${questionCount} Fragen werden mindestens ${requiredPlaylistTrackCount} benötigt.`;
   }, [questionCount, requiredPlaylistTrackCount, selectedPlaylist]);
 
   const setPersistedHostJwt = (jwt: string | null) => {
@@ -1725,4 +1725,3 @@ export function useBeatBrainController() {
 }
 
 export type BeatBrainController = ReturnType<typeof useBeatBrainController>;
-
