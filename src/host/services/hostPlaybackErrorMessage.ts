@@ -67,7 +67,17 @@ export function getHostPlaybackErrorMessage(input: unknown) {
     normalized.includes("authorization failed") ||
     normalized.includes("browser authentication failed")
   ) {
-    return "Die Spotify Web Playback SDK hat die Browser-Anmeldung abgelehnt. Öffne den Host unter 127.0.0.1, lade die Seite hart neu und starte das Quiz erneut.";
+    return "Die Spotify Browser-Wiedergabe konnte nicht authentifiziert werden. Häufig blockieren Adblocker, Brave Shields oder DNS-Filter die Spotify-Domains. Öffne den Host unter 127.0.0.1, deaktiviere solche Blocker für Spotify/127.0.0.1 und lade die Seite hart neu.";
+  }
+
+  if (
+    normalized.includes("browser player could not connect") ||
+    normalized.includes("blocked by client") ||
+    normalized.includes("dealer.g2.spotify.com") ||
+    normalized.includes("apresolve.spotify.com") ||
+    normalized.includes("widevine-license")
+  ) {
+    return "Der Browser blockiert die Spotify Browser-Wiedergabe. Deaktiviere Adblocker, Brave Shields oder DNS-Filter für Spotify und 127.0.0.1, dann lade die Seite hart neu.";
   }
 
   if (
@@ -90,10 +100,17 @@ export function getHostPlaybackErrorMessage(input: unknown) {
   }
 
   if (
+    normalized.includes("no active device") ||
+    normalized.includes("no active spotify device") ||
+    normalized.includes("no_active_device")
+  ) {
+    return "Kein aktives Spotify-Geraet verfuegbar. Wenn Browser-Playback blockiert ist, oeffne Spotify auf Desktop, Web oder Mobile, starte dort kurz einen Song und starte das Quiz dann erneut.";
+  }
+
+  if (
     normalized.includes("browser player is not ready") ||
     normalized.includes("device not ready") ||
     normalized.includes("device unavailable") ||
-    normalized.includes("no active device") ||
     normalized.includes("did not become active")
   ) {
     return "Der Spotify-Browser-Player ist noch nicht aktiv. Bitte kurz warten und dann erneut starten.";
@@ -107,6 +124,13 @@ export function getHostPlaybackErrorMessage(input: unknown) {
 
   if (normalized.includes("backend not reachable")) {
     return "Das Backend ist aktuell nicht erreichbar. Bitte Host und Backend prüfen.";
+  }
+
+  if (
+    normalized.includes("lobby not found") ||
+    normalized.includes("host not authorized for this lobby")
+  ) {
+    return "Die Host-Session ist nicht mehr aktiv. Bitte auf dem Startscreen eine neue Session starten.";
   }
 
   if (

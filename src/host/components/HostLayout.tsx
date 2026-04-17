@@ -57,8 +57,8 @@ export function HostLayout({
       ]}
     >
       <View
-        pointerEvents="none"
         style={{
+          pointerEvents: "none",
           position: "absolute",
           top: -120,
           right: -60,
@@ -69,8 +69,8 @@ export function HostLayout({
         }}
       />
       <View
-        pointerEvents="none"
         style={{
+          pointerEvents: "none",
           position: "absolute",
           bottom: -140,
           left: -90,
@@ -81,8 +81,8 @@ export function HostLayout({
         }}
       />
       <View
-        pointerEvents="none"
         style={{
+          pointerEvents: "none",
           position: "absolute",
           top: "32%",
           left: "9%",

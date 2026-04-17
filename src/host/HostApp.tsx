@@ -62,6 +62,7 @@ export function HostApp() {
         playlistsError={app.playlistsError}
         selectedPlaylistIndex={app.selectedPlaylistIndex}
         setupError={app.setupError}
+        socketError={app.socketError}
         startDisabledReason={app.chooseStartDisabledReason}
         creatingSession={app.creatingSession}
         onSelectPlaylistIndex={app.setSelectedPlaylistIndex}
@@ -76,6 +77,7 @@ export function HostApp() {
       <HostQuizCreateScreen
         playlistIdInput={app.playlistIdInput}
         setupError={app.setupError}
+        socketError={app.socketError}
         creatingSession={app.creatingSession}
         onPlaylistIdInputChange={app.setPlaylistIdInput}
         onCreateSession={app.createSessionFromCreate}

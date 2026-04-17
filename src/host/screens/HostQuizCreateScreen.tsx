@@ -11,6 +11,7 @@ import { useHostViewport } from "../hooks/useHostViewport";
 type Props = {
   playlistIdInput: string;
   setupError: string | null;
+  socketError?: string | null;
   creatingSession: boolean;
   onPlaylistIdInputChange: (value: string) => void;
   onCreateSession: () => void;
@@ -20,12 +21,14 @@ type Props = {
 export function HostQuizCreateScreen({
   playlistIdInput,
   setupError,
+  socketError,
   creatingSession,
   onPlaylistIdInputChange,
   onCreateSession,
   notice,
 }: Props) {
   const { contentMax, radii, space, typeScale, fluidBetween, isCompactHeight } = useHostViewport();
+  const setupStatusMessage = setupError || socketError;
 
   return (
     <HostLayout
@@ -92,7 +95,7 @@ export function HostQuizCreateScreen({
           />
         </HostPanel>
 
-        {!!setupError && (
+        {!!setupStatusMessage && (
           <Text
             style={{
               color: Colors.textOnBg,
@@ -101,7 +104,7 @@ export function HostQuizCreateScreen({
               fontSize: typeScale.bodySm,
             }}
           >
-            {setupError}
+            {setupStatusMessage}
           </Text>
         )}
 

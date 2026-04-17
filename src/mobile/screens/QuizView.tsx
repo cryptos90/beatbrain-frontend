@@ -16,6 +16,7 @@ import {
   QUIZ_LOGO_HEIGHT,
   QUIZ_LOGO_WIDTH,
 } from "../../constants/app";
+import { getDisplayQuizOptions } from "../../shared/quiz/compactOptionLabels";
 import { Colors, Radius } from "../../theme";
 import type { QuizQuestion, QuizQuestionOption } from "../../shared/types/app";
 
@@ -100,6 +101,7 @@ export function QuizView({
       label: value,
     };
   });
+  const displayOptions = getDisplayQuizOptions(currentQuestion.questionObject, orderedOptions);
   const payload = currentQuestion.questionObject.payload;
   const toleranceRaw = Number(payload?.toleranceYears ?? 0);
   const toleranceYears =
@@ -141,9 +143,9 @@ export function QuizView({
         ? "rgba(239,68,68,0.95)"
         : "transparent";
   const rows =
-    orderedOptions.length <= 2
-      ? [orderedOptions]
-      : [orderedOptions.slice(0, 2), orderedOptions.slice(2, 4)];
+    displayOptions.length <= 2
+      ? [displayOptions]
+      : [displayOptions.slice(0, 2), displayOptions.slice(2, 4)];
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
@@ -319,14 +321,16 @@ export function QuizView({
                       )}
                       {revealed && (
                         <Text
+                          numberOfLines={2}
                           style={{
                             color: Colors.textOnNavy,
                             fontSize: 14,
+                            lineHeight: 18,
                             fontWeight: "700",
                             textAlign: "center",
                           }}
                         >
-                          {option.label}
+                          {option.displayLabel}
                         </Text>
                       )}
                     </Pressable>
@@ -362,6 +366,7 @@ export function QuizView({
                         backgroundColor,
                         borderRadius: Radius.xl,
                         paddingVertical: 22,
+                        paddingHorizontal: 12,
                         alignItems: "center",
                         justifyContent: "center",
                         opacity: revealed && !isCorrect && !pressed ? 0.7 : 1,
@@ -369,15 +374,17 @@ export function QuizView({
                       }}
                     >
                       <Text
+                        numberOfLines={2}
                         style={{
                           color: Colors.textOnNavy,
                           fontSize: 18,
+                          lineHeight: 22,
                           fontWeight: "700",
                           textAlign: "center",
                           paddingHorizontal: 10,
                         }}
                       >
-                        {option.label}
+                        {option.displayLabel}
                       </Text>
                     </Pressable>
                   );

@@ -152,6 +152,7 @@ export function HostQuizScreen({
       (question.questionObject.format === "year_input" ||
         question.questionObject.answerType === "year-input"),
   );
+  const isCoverOptionsQuestion = question?.questionObject.format === "cover_options";
   const toleranceRaw = Number(question?.questionObject.payload?.toleranceYears ?? 0);
   const toleranceYears =
     Number.isFinite(toleranceRaw) && toleranceRaw >= 0 ? Math.floor(toleranceRaw) : 0;
@@ -358,86 +359,92 @@ export function HostQuizScreen({
     wrongAnswerGroups,
   ]);
 
-  const renderAnswerTile = (tile: AnswerTile) => (
-    <View
-      key={tile.id}
-      style={{
-        width: "100%",
-        height: "100%",
-        backgroundColor: tile.kind === "correct" ? "#16a34a" : "#dc2626",
-        borderRadius: radii.xl,
-        paddingVertical: isCompactHeight ? space.md : space.lg,
-        paddingHorizontal: isCompactHeight ? space.sm : space.md,
-        gap: isCompactHeight ? space.sm : space.md,
-        justifyContent: "space-between",
-      }}
-    >
-      <View style={{ gap: isCompactHeight ? space.xs : space.sm }}>
-        <Text
-          style={{
-            color: Colors.navy,
-            fontSize: typeScale.label,
-            fontWeight: "900",
-            textAlign: "center",
-            letterSpacing: 1,
-            textTransform: "uppercase",
-          }}
-        >
-          {tile.label}
-        </Text>
-        {!!tile.coverUrl && (
-          <Image
-            source={{ uri: tile.coverUrl }}
-            resizeMode="cover"
-            style={{
-              width: Math.min(isCompactHeight ? 76 : 112, Math.max(52, answerTileMinWidth * 0.28)),
-              height: Math.min(isCompactHeight ? 76 : 112, Math.max(52, answerTileMinWidth * 0.28)),
-              borderRadius: radii.md,
-              alignSelf: "center",
-            }}
-          />
-        )}
-        <Text
-          style={{
-            color: Colors.navy,
-            fontSize: fluidBetween(isCompactHeight ? 16 : 18, isCompactHeight ? 24 : 32, "width"),
-            fontWeight: "900",
-            textAlign: "center",
-            lineHeight: fluidBetween(isCompactHeight ? 20 : 22, isCompactHeight ? 28 : 36, "width"),
-          }}
-        >
-          {tile.answerDisplay}
-        </Text>
-        {!!tile.subtitle && (
+  const renderAnswerTile = (tile: AnswerTile) => {
+    const showCoverOnlyDetails = isCoverOptionsQuestion && Boolean(tile.coverUrl);
+
+    return (
+      <View
+        key={tile.id}
+        style={{
+          width: "100%",
+          height: "100%",
+          backgroundColor: tile.kind === "correct" ? "#16a34a" : "#dc2626",
+          borderRadius: radii.xl,
+          paddingVertical: isCompactHeight ? space.md : space.lg,
+          paddingHorizontal: isCompactHeight ? space.sm : space.md,
+          gap: isCompactHeight ? space.sm : space.md,
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ gap: isCompactHeight ? space.xs : space.sm }}>
           <Text
             style={{
               color: Colors.navy,
-              fontSize: typeScale.bodySm,
+              fontSize: typeScale.label,
+              fontWeight: "900",
               textAlign: "center",
-              opacity: 0.92,
+              letterSpacing: 1,
+              textTransform: "uppercase",
             }}
           >
-            {tile.subtitle}
+            {tile.label}
           </Text>
-        )}
-      </View>
+          {!!tile.coverUrl && (
+            <Image
+              source={{ uri: tile.coverUrl }}
+              resizeMode="cover"
+              style={{
+                width: Math.min(isCompactHeight ? 76 : 112, Math.max(52, answerTileMinWidth * 0.28)),
+                height: Math.min(isCompactHeight ? 76 : 112, Math.max(52, answerTileMinWidth * 0.28)),
+                borderRadius: radii.md,
+                alignSelf: "center",
+              }}
+            />
+          )}
+          {!showCoverOnlyDetails && (
+            <Text
+              style={{
+                color: Colors.navy,
+                fontSize: fluidBetween(isCompactHeight ? 16 : 18, isCompactHeight ? 24 : 32, "width"),
+                fontWeight: "900",
+                textAlign: "center",
+                lineHeight: fluidBetween(isCompactHeight ? 20 : 22, isCompactHeight ? 28 : 36, "width"),
+              }}
+            >
+              {tile.answerDisplay}
+            </Text>
+          )}
+          {!showCoverOnlyDetails && !!tile.subtitle && (
+            <Text
+              style={{
+                color: Colors.navy,
+                fontSize: typeScale.bodySm,
+                textAlign: "center",
+                opacity: 0.92,
+              }}
+            >
+              {tile.subtitle}
+            </Text>
+          )}
+        </View>
 
-      {tile.players.length > 0 ? (
-        playerChips(tile.players, true)
-      ) : !!tile.emptyMessage ? (
-        <Text
-          style={{
-            color: Colors.navy,
-            textAlign: "center",
-            fontSize: typeScale.bodySm,
-            fontWeight: "700",
-          }}
-        >
-          {tile.emptyMessage}
-        </Text>
-      ) : null}
-    </View>
-  );
+        {tile.players.length > 0 ? (
+          playerChips(tile.players, true)
+        ) : !!tile.emptyMessage ? (
+          <Text
+            style={{
+              color: Colors.navy,
+              textAlign: "center",
+              fontSize: typeScale.bodySm,
+              fontWeight: "700",
+            }}
+          >
+            {tile.emptyMessage}
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <HostLayout maxWidth={contentMax.stage} notice={notice} compactHeader headerEyebrow="Live Quiz">

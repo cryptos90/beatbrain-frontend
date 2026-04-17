@@ -22,9 +22,13 @@ import { getRequiredQuizSeedPoolSize } from "../../shared/quiz/playlistRequireme
 import type { LobbyState, PlaylistCard, QuizQuestion } from "../../shared/types/app";
 import {
   disconnectHostSpotifyWebPlayback,
+  type HostPlaybackPrimeResult,
   getPreferredHostRoundPlaybackMode,
+  primeHostServerPlaybackDevice,
+  type HostRoundPlaybackMode,
   playHostTrackWithWebSdkFallback,
   primeHostSpotifyWebPlayback,
+  shouldFallbackToServerPlaybackOnPrimeFailure,
   warmHostSpotifyWebPlayback,
 } from "../services/spotifyHostPlayback";
 import { getHostPlaybackErrorMessage } from "../services/hostPlaybackErrorMessage";
@@ -403,6 +407,9 @@ export function useHostController() {
 
   const socketRef = useRef<Socket | null>(null);
   const lobbyJoinCodeRef = useRef<string | null>(null);
+  const activeRoundPlaybackModeRef = useRef<HostRoundPlaybackMode>(
+    getPreferredHostRoundPlaybackMode(),
+  );
   const questionPlaybackKeyRef = useRef<string | null>(null);
   const startQuestionPlaybackRef = useRef<(nextQuestion: QuizQuestion | null) => Promise<void>>(
     async () => {},
@@ -545,16 +552,16 @@ export function useHostController() {
     }
   }, [apiContext, hostJwt]);
 
-  const primeHostPlayback = useCallback(async () => {
+  const primeHostPlayback = useCallback(async (): Promise<HostPlaybackPrimeResult> => {
     if (Platform.OS !== "web" || !hostJwt) {
       return {
         ok: false,
         code: "auth",
         message: "Bitte den Host zuerst mit Spotify verbinden.",
-      };
+      } satisfies HostPlaybackPrimeResult;
     }
     logHostPlaybackUiState("prime:start");
-    const result = await primeHostSpotifyWebPlayback(apiContext);
+    const result: HostPlaybackPrimeResult = await primeHostSpotifyWebPlayback(apiContext);
     logHostPlaybackUiState(result.ok ? "prime:ok" : "prime:fail", {
       ...(result.ok
         ? { deviceId: result.deviceId ?? null }
@@ -870,7 +877,9 @@ export function useHostController() {
       setCorrectAnswer(null);
       resetRoundFlags();
       navigateToScreen("quiz", { mode: "replace" });
-      void startQuestionPlaybackRef.current(nextQuestion);
+      if (activeRoundPlaybackModeRef.current === "host_web_sdk") {
+        void startQuestionPlaybackRef.current(nextQuestion);
+      }
     });
 
     socket.on("round:reveal", (payload: { correctAnswer: string; state: LobbyState }) => {
@@ -915,6 +924,7 @@ export function useHostController() {
       setLobbyState(state);
       setQuestion(null);
       setCorrectAnswer(null);
+      activeRoundPlaybackModeRef.current = getPreferredHostRoundPlaybackMode();
       setPreferredLobbyScreen("setupMode");
       resetRoundFlags();
       navigateToScreen("setupMode", { mode: "push", joinCode: state.joinCode });
@@ -926,22 +936,65 @@ export function useHostController() {
       setLobbyState(state);
       setQuestion(null);
       setCorrectAnswer(null);
+      activeRoundPlaybackModeRef.current = getPreferredHostRoundPlaybackMode();
       setPreferredLobbyScreen("lobby");
       resetRoundFlags();
       navigateToScreen("lobby", { mode: "push", joinCode: state.joinCode });
     });
 
     socket.on("exception", (payload: unknown) => {
-      const message = getHostPlaybackErrorMessage(readExceptionMessage(payload));
+      const rawMessage = readExceptionMessage(payload);
+      const message = getHostPlaybackErrorMessage(rawMessage);
       setCreatingLobby(false);
       setCreatingSession(false);
       setActionBusy(false);
       setSocketError(message);
+
+      const normalizedRawMessage = rawMessage.toLowerCase();
+      if (
+        normalizedRawMessage.includes("lobby not found") ||
+        normalizedRawMessage.includes("host not authorized for this lobby")
+      ) {
+        setLobbyState(null);
+        setQuestion(null);
+        setCorrectAnswer(null);
+        activeRoundPlaybackModeRef.current = getPreferredHostRoundPlaybackMode();
+        setPreferredLobbyScreen("lobby");
+        resetRoundFlags();
+        navigateToScreen("start", { mode: "replace" });
+      }
+    });
+
+    socket.on("disconnect", (reason: string) => {
+      if (reason === "io client disconnect") {
+        return;
+      }
+
+      setCreatingLobby(false);
+      setCreatingSession(false);
+      setActionBusy(false);
+
+      if (!lobbyJoinCodeRef.current) {
+        setSocketError("Socket-Verbindung verloren.");
+        return;
+      }
+
+      setSocketError(
+        "Die Host-Session ist nicht mehr aktiv. Bitte auf dem Startscreen eine neue Session starten.",
+      );
+      setLobbyState(null);
+      setQuestion(null);
+      setCorrectAnswer(null);
+      activeRoundPlaybackModeRef.current = getPreferredHostRoundPlaybackMode();
+      setPreferredLobbyScreen("lobby");
+      resetRoundFlags();
+      navigateToScreen("start", { mode: "replace" });
     });
 
     socket.on("connect_error", (error: Error) => {
       setSocketError(error.message || "Socket-Verbindung fehlgeschlagen.");
       setCreatingLobby(false);
+      setCreatingSession(false);
       setActionBusy(false);
     });
 
@@ -986,6 +1039,9 @@ export function useHostController() {
     setSocketError(null);
     setCreatingLobby(true);
     const socket = connectSocket();
+    if (socket.disconnected) {
+      socket.connect();
+    }
     socket.emit("host:createLobby", { hostJwt });
   };
 
@@ -1012,7 +1068,10 @@ export function useHostController() {
     navigateToScreen("lobby", { mode: "push" });
   };
 
-  const emitStartRound = async (sessionId: string) => {
+  const emitStartRound = async (
+    sessionId: string,
+    playbackMode: HostRoundPlaybackMode,
+  ) => {
     if (!hostJwt || !lobby?.joinCode) {
       setSetupError("Lobby nicht bereit.");
       return false;
@@ -1022,15 +1081,19 @@ export function useHostController() {
     setSocketError(null);
     logHostPlaybackUiState("round:start:emit", {
       joinCode: lobby.joinCode,
-      playbackMode: getPreferredHostRoundPlaybackMode(),
+      playbackMode,
     });
+    activeRoundPlaybackModeRef.current = playbackMode;
     const socket = connectSocket();
+    if (socket.disconnected) {
+      socket.connect();
+    }
     socket.emit("host:startRound", {
       hostJwt,
       joinCode: lobby.joinCode,
       quizSessionId: sessionId,
       timerMs: 30_000,
-      playbackMode: getPreferredHostRoundPlaybackMode(),
+      playbackMode,
     });
     return true;
   };
@@ -1051,18 +1114,35 @@ export function useHostController() {
     });
     const preferredSetupScreen =
       screen === "setupCreate" ? "setupCreate" : "setupChoose";
-    if (getPreferredHostRoundPlaybackMode() === "host_web_sdk") {
+    let playbackMode = getPreferredHostRoundPlaybackMode();
+    if (playbackMode === "host_web_sdk") {
       const primeResult = await primeHostPlayback();
       if (!primeResult.ok) {
-        const status = await refreshSpotifyStatus();
-        const blockingStatusMessage = getBlockingHostSpotifyStatusMessage(status);
-        setSetupError(
-          blockingStatusMessage ??
-            primeResult.message ??
-            "Spotify-Browser-Playback konnte nicht vorbereitet werden.",
-        );
-        setCreatingSession(false);
-        return;
+        if (shouldFallbackToServerPlaybackOnPrimeFailure(primeResult.code)) {
+          const serverPrimeResult = await primeHostServerPlaybackDevice(apiContext);
+          if (!serverPrimeResult.ok) {
+            setSetupError(serverPrimeResult.message);
+            setCreatingSession(false);
+            return;
+          }
+
+          playbackMode = "server";
+          setSetupError(
+            serverPrimeResult.deviceName
+              ? `Spotify Browser-Playback ist blockiert. Das Quiz startet stattdessen auf ${serverPrimeResult.deviceName}.`
+              : "Spotify Browser-Playback ist blockiert. Das Quiz startet stattdessen auf einem anderen Spotify-Geraet.",
+          );
+        } else {
+          const status = await refreshSpotifyStatus();
+          const blockingStatusMessage = getBlockingHostSpotifyStatusMessage(status);
+          setSetupError(
+            blockingStatusMessage ??
+              primeResult.message ??
+              "Spotify-Browser-Playback konnte nicht vorbereitet werden.",
+          );
+          setCreatingSession(false);
+          return;
+        }
       }
     }
     try {
@@ -1080,7 +1160,7 @@ export function useHostController() {
       setCorrectAnswer(null);
       resetRoundFlags();
       setPreferredLobbyScreen(preferredSetupScreen);
-      await emitStartRound(sessionId);
+      await emitStartRound(sessionId, playbackMode);
     } catch (error) {
       setSetupError(
         getHostPlaybackErrorMessage(
@@ -1124,6 +1204,9 @@ export function useHostController() {
     setPreferredLobbyScreen("setupMode");
     setSocketError(null);
     const socket = connectSocket();
+    if (socket.disconnected) {
+      socket.connect();
+    }
     socket.emit("host:restartQuiz", {
       hostJwt,
       joinCode: lobby.joinCode,
@@ -1139,6 +1222,9 @@ export function useHostController() {
     setPreferredLobbyScreen("lobby");
     setSocketError(null);
     const socket = connectSocket();
+    if (socket.disconnected) {
+      socket.connect();
+    }
     socket.emit("host:returnToMenu", {
       hostJwt,
       joinCode: lobby.joinCode,

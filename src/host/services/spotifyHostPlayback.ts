@@ -5,6 +5,7 @@ import {
   getSpotifyPlayerDevices,
   getSpotifySdkAccessToken,
   playSpotifyTrack,
+  type SpotifyPlayerDevice,
   transferSpotifyPlayback,
 } from "../../shared/net/beatbrainApi";
 import { getHostPlaybackErrorMessage } from "./hostPlaybackErrorMessage";
@@ -16,6 +17,12 @@ type HostPlaybackResult =
 export type HostPlaybackPrimeResult =
   | { ok: true; deviceId: string | null }
   | { ok: false; message: string; code: HostPlaybackErrorCode };
+
+export type HostServerPlaybackPrimeResult =
+  | { ok: true; deviceId: string; deviceName: string | null }
+  | { ok: false; message: string };
+
+export type HostRoundPlaybackMode = "host_web_sdk" | "server";
 
 type SpotifyPlayerInit = {
   name: string;
@@ -263,6 +270,60 @@ function shouldRetryBrowserPlayer(code: HostPlaybackErrorCode) {
 
 function shouldAllowServerFallback(code: HostPlaybackErrorCode) {
   return code === "sdk_unavailable" || code === "network";
+}
+
+export function shouldFallbackToServerPlaybackOnPrimeFailure(
+  code: HostPlaybackErrorCode,
+) {
+  return code !== "account" && code !== "rate_limit";
+}
+
+function pickServerFallbackDevice(devices: SpotifyPlayerDevice[]) {
+  const normalized = devices.filter((device) => Boolean(device.id));
+  if (!normalized.length) {
+    return null;
+  }
+
+  const active = normalized.find((device) => Boolean(device.is_active));
+  if (active) {
+    return active;
+  }
+
+  return normalized[0] ?? null;
+}
+
+export async function primeHostServerPlaybackDevice(
+  context: ApiClientContext,
+): Promise<HostServerPlaybackPrimeResult> {
+  try {
+    const devices = await getSpotifyPlayerDevices(context);
+    const selectedDevice = pickServerFallbackDevice(devices);
+    if (!selectedDevice?.id) {
+      return {
+        ok: false,
+        message:
+          "Kein Spotify-Geraet verfuegbar. Oeffne Spotify auf Desktop, Web oder Mobile und starte dort kurz die Wiedergabe. Danach das Quiz erneut starten.",
+      };
+    }
+
+    await transferSpotifyPlayback(context, {
+      deviceId: selectedDevice.id,
+      play: false,
+    });
+
+    return {
+      ok: true,
+      deviceId: selectedDevice.id,
+      deviceName: selectedDevice.name || null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: getHostPlaybackErrorMessage(
+        toHostPlaybackError(error, "Spotify fallback device could not be prepared."),
+      ),
+    };
+  }
 }
 
 function toHostPlaybackError(error: unknown, fallbackMessage: string) {
@@ -842,7 +903,7 @@ async function playViaFallback(context: ApiClientContext, trackUri: string) {
   });
 }
 
-export function getPreferredHostRoundPlaybackMode(): "host_web_sdk" | "server" {
+export function getPreferredHostRoundPlaybackMode(): HostRoundPlaybackMode {
   return isWebRuntime() ? "host_web_sdk" : "server";
 }
 
@@ -866,7 +927,9 @@ export async function warmHostSpotifyWebPlayback(context: ApiClientContext) {
   }
 }
 
-export async function primeHostSpotifyWebPlayback(context: ApiClientContext) {
+export async function primeHostSpotifyWebPlayback(
+  context: ApiClientContext,
+): Promise<HostPlaybackPrimeResult> {
   if (!isWebRuntime()) {
     return {
       ok: false,
