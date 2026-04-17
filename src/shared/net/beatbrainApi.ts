@@ -14,15 +14,38 @@ export type SpotifyPlayerDevice = {
 };
 
 export type HostSpotifyStatus = {
+  state?: "ready" | "blocked" | "unknown";
   connected: boolean;
   canUseWebPlayback: boolean | null;
   needsReconnect: boolean;
+  needsReauth?: boolean;
   missingPremium: boolean;
   missingPlaybackScope: boolean;
+  missingScopes?: string[];
+  hasRefreshToken?: boolean;
+  accessTokenExpiresAt?: number;
+  isPremium?: boolean;
+  reason?:
+    | "MISSING_SCOPES"
+    | "NO_REFRESH_TOKEN"
+    | "REFRESH_FAILED"
+    | "NOT_LOGGED_IN"
+    | "PREMIUM_REQUIRED"
+    | "UNKNOWN";
   scopeStatus: "granted" | "missing" | "unknown";
   webPlaybackStatus: "ready" | "blocked" | "unknown";
   product?: string;
   message: string;
+};
+
+export type HostSpotifySdkToken = {
+  accessToken: string;
+  expiresIn: number;
+  expiresAt?: number;
+  grantedScopes?: string[];
+  needsReauth?: boolean;
+  reason?: HostSpotifyStatus["reason"];
+  missingScopes?: string[];
 };
 
 type AuthRequestOptions = {
@@ -90,7 +113,30 @@ export async function getSpotifySdkAccessToken(context: ApiClientContext) {
   return {
     accessToken: String(payload?.accessToken ?? "").trim(),
     expiresIn: Number(payload?.expiresIn ?? 0),
-  };
+    expiresAt:
+      typeof payload?.expiresAt === "number" ? Number(payload.expiresAt) : undefined,
+    grantedScopes: Array.isArray(payload?.grantedScopes)
+      ? payload.grantedScopes
+          .map((entry: unknown) => String(entry ?? "").trim())
+          .filter(Boolean)
+      : undefined,
+    needsReauth:
+      typeof payload?.needsReauth === "boolean" ? payload.needsReauth : undefined,
+    reason:
+      payload?.reason === "MISSING_SCOPES" ||
+      payload?.reason === "NO_REFRESH_TOKEN" ||
+      payload?.reason === "REFRESH_FAILED" ||
+      payload?.reason === "NOT_LOGGED_IN" ||
+      payload?.reason === "PREMIUM_REQUIRED" ||
+      payload?.reason === "UNKNOWN"
+        ? payload.reason
+        : undefined,
+    missingScopes: Array.isArray(payload?.missingScopes)
+      ? payload.missingScopes
+          .map((entry: unknown) => String(entry ?? "").trim())
+          .filter(Boolean)
+      : undefined,
+  } satisfies HostSpotifySdkToken;
 }
 
 export async function getHostSpotifyStatus(
@@ -101,12 +147,42 @@ export async function getHostSpotifyStatus(
   })) as JsonRecord;
 
   return {
+    state:
+      payload?.state === "ready" ||
+      payload?.state === "blocked" ||
+      payload?.state === "unknown"
+        ? payload.state
+        : undefined,
     connected: Boolean(payload?.connected),
     canUseWebPlayback:
       typeof payload?.canUseWebPlayback === "boolean" ? payload.canUseWebPlayback : null,
     needsReconnect: Boolean(payload?.needsReconnect),
+    needsReauth:
+      typeof payload?.needsReauth === "boolean" ? payload.needsReauth : undefined,
     missingPremium: Boolean(payload?.missingPremium),
     missingPlaybackScope: Boolean(payload?.missingPlaybackScope),
+    missingScopes: Array.isArray(payload?.missingScopes)
+      ? payload.missingScopes
+          .map((entry: unknown) => String(entry ?? "").trim())
+          .filter(Boolean)
+      : undefined,
+    hasRefreshToken:
+      typeof payload?.hasRefreshToken === "boolean" ? payload.hasRefreshToken : undefined,
+    accessTokenExpiresAt:
+      typeof payload?.accessTokenExpiresAt === "number"
+        ? Number(payload.accessTokenExpiresAt)
+        : undefined,
+    isPremium:
+      typeof payload?.isPremium === "boolean" ? payload.isPremium : undefined,
+    reason:
+      payload?.reason === "MISSING_SCOPES" ||
+      payload?.reason === "NO_REFRESH_TOKEN" ||
+      payload?.reason === "REFRESH_FAILED" ||
+      payload?.reason === "NOT_LOGGED_IN" ||
+      payload?.reason === "PREMIUM_REQUIRED" ||
+      payload?.reason === "UNKNOWN"
+        ? payload.reason
+        : undefined,
     scopeStatus:
       payload?.scopeStatus === "granted" ||
       payload?.scopeStatus === "missing" ||

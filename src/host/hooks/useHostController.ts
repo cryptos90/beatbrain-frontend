@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { io, type Socket } from "socket.io-client";
 import {
   API_BASE_URL,
+  getCanonicalLoopbackWebUrl,
   isLoopbackApiBaseUrl,
   isLoopbackHostname,
   normalizeApiBaseUrl,
@@ -957,7 +958,9 @@ export function useHostController() {
     setAuthError(null);
     try {
       const routeBase = resolveHostRouteBase(window.location.pathname);
-      const redirectOrigin = `${window.location.origin}${routeBase}/start`;
+      const canonicalOrigin =
+        getCanonicalLoopbackWebUrl(window.location.origin) ?? window.location.origin;
+      const redirectOrigin = new URL(`${routeBase}/start`, canonicalOrigin).toString();
       const response = await startSpotifyAuth("web", { redirectOrigin });
       const authorizeUrl =
         typeof response.authorizeUrl === "string" ? response.authorizeUrl : "";
@@ -1182,6 +1185,23 @@ export function useHostController() {
     questionCount,
     selectedPlaylistIndex,
   ]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    const canonicalUrl = getCanonicalLoopbackWebUrl(window.location.href);
+    if (!canonicalUrl || canonicalUrl === window.location.href) {
+      return;
+    }
+
+    logHostPlaybackUiState("web:origin:canonicalize", {
+      from: window.location.origin,
+      to: new URL(canonicalUrl).origin,
+    });
+    window.location.replace(canonicalUrl);
+  }, []);
 
   useEffect(() => {
     const hydrateAuth = async () => {

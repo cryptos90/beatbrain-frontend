@@ -43,6 +43,29 @@ export function isLoopbackApiBaseUrl(raw: string | undefined | null) {
   }
 }
 
+export function getCanonicalLoopbackWebUrl(rawUrl: string | undefined | null) {
+  const value = rawUrl?.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const current = new URL(value);
+    const apiBase = new URL(API_BASE_URL);
+    const currentHost = normalizeHostname(current.hostname);
+    const apiHost = normalizeHostname(apiBase.hostname);
+
+    if (currentHost !== "localhost" || apiHost !== "127.0.0.1") {
+      return null;
+    }
+
+    current.hostname = "127.0.0.1";
+    return current.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function deriveApiBaseUrlFromJoinUrl(raw: string | undefined | null) {
   const value = raw?.trim();
   if (!value) {

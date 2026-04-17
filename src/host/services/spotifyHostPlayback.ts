@@ -54,6 +54,7 @@ type HostPlaybackErrorCode =
 type CachedSdkToken = {
   accessToken: string;
   expiresAt: number;
+  grantedScopes: string[];
 };
 
 declare global {
@@ -88,6 +89,13 @@ const DEVICE_DISCOVERY_TIMEOUT_MS = 4_000;
 const DEVICE_ACTIVE_TIMEOUT_MS = 6_500;
 const DEVICE_POLL_INTERVAL_MS = 350;
 const SDK_TOKEN_MIN_VALIDITY_MS = 20_000;
+const SDK_REQUIRED_SCOPES = [
+  "streaming",
+  "user-read-email",
+  "user-read-private",
+  "user-modify-playback-state",
+  "user-read-playback-state",
+];
 
 let activeApiContext: ApiClientContext | null = null;
 let activeJwtSnapshot: string | null = null;
@@ -138,6 +146,14 @@ function createPlaybackError(
   options?: { retryAfterSeconds?: number },
 ) {
   return new HostPlaybackError(code, message, options);
+}
+
+function getMissingSdkScopes(grantedScopes: string[] | undefined) {
+  const normalized = Array.isArray(grantedScopes)
+    ? grantedScopes.map((scope) => String(scope ?? "").trim()).filter(Boolean)
+    : [];
+
+  return SDK_REQUIRED_SCOPES.filter((scope) => !normalized.includes(scope));
 }
 
 function rememberPlayerError(code: HostPlaybackErrorCode, message: string) {
@@ -319,22 +335,54 @@ async function getFreshSdkToken(context?: ApiClientContext) {
   sdkTokenPromise = (async () => {
     try {
       const payload = await getSpotifySdkAccessToken(resolvedContext);
+      if (payload.needsReauth) {
+        throw createPlaybackError(
+          "auth",
+          payload.reason === "MISSING_SCOPES"
+            ? `Spotify-Reauth erforderlich. Fehlende Scopes: ${(
+                payload.missingScopes ?? []
+              ).join(", ")}`
+            : payload.reason === "PREMIUM_REQUIRED"
+              ? "Spotify Premium ist für Browser-Playback erforderlich."
+              : "Spotify-Reauth für Browser-Playback erforderlich.",
+        );
+      }
+      if (payload.reason === "PREMIUM_REQUIRED" && !payload.accessToken) {
+        throw createPlaybackError(
+          "account",
+          "Spotify Premium ist für Browser-Playback erforderlich.",
+        );
+      }
+      const missingSdkScopes = getMissingSdkScopes(payload.grantedScopes);
+      if (missingSdkScopes.length > 0) {
+        throw createPlaybackError(
+          "auth",
+          `Spotify-Reauth erforderlich. Fehlende Scopes: ${missingSdkScopes.join(", ")}`,
+        );
+      }
       const accessToken = String(payload.accessToken ?? "").trim();
       const expiresInSeconds = Number(payload.expiresIn ?? 0);
       if (!accessToken) {
         throw createPlaybackError(
-          "auth",
-          "Spotify access token for browser playback is missing.",
+          payload.reason === "PREMIUM_REQUIRED" ? "account" : "auth",
+          payload.reason === "PREMIUM_REQUIRED"
+            ? "Spotify Premium ist für Browser-Playback erforderlich."
+            : "Spotify access token for browser playback is missing.",
         );
       }
 
-      const expiresAt = Date.now() + Math.max(30, expiresInSeconds - 20) * 1000;
+      const expiresAt =
+        typeof payload.expiresAt === "number" && Number.isFinite(payload.expiresAt)
+          ? Math.floor(payload.expiresAt)
+          : Date.now() + Math.max(30, expiresInSeconds - 20) * 1000;
       sdkTokenCache = {
         accessToken,
         expiresAt,
+        grantedScopes: Array.isArray(payload.grantedScopes) ? payload.grantedScopes : [],
       };
       infoPlayback("token:fetch:ok", {
         expiresAt: new Date(expiresAt).toISOString(),
+        scopes: sdkTokenCache.grantedScopes,
       });
       return accessToken;
     } catch (error) {
@@ -472,9 +520,15 @@ function registerPlayerListeners(player: SpotifyPlayer) {
     const message =
       String((payload as SpotifyPlayerErrorPayload | undefined)?.message ?? "").trim() ||
       "Spotify browser player authentication failed.";
+    const currentOrigin = isWebRuntime() ? window.location.origin : undefined;
+    const grantedScopes = sdkTokenCache?.grantedScopes ?? [];
     sdkTokenCache = null;
     rememberPlayerError("auth", message);
-    warnPlayback("player:error:authentication_error", { message });
+    warnPlayback("player:error:authentication_error", {
+      message,
+      origin: currentOrigin,
+      scopes: grantedScopes,
+    });
     resetPlayerState({ clearToken: true, clearError: false });
   });
 
@@ -529,6 +583,11 @@ async function ensurePlayer() {
     volume: 0.9,
     getOAuthToken: (callback) => {
       infoPlayback("token:getOAuthToken called");
+      const now = Date.now();
+      if (sdkTokenCache && sdkTokenCache.expiresAt - now > SDK_TOKEN_MIN_VALIDITY_MS) {
+        callback(sdkTokenCache.accessToken);
+        return;
+      }
       void (async () => {
         try {
           const token = await getFreshSdkToken();
@@ -795,7 +854,6 @@ export async function warmHostSpotifyWebPlayback(context: ApiClientContext) {
   try {
     await syncActiveApiContext(context);
     await ensurePlayer();
-    await connectPlayer();
   } catch (error) {
     const playbackError = toHostPlaybackError(
       error,

@@ -67,7 +67,7 @@ export function getHostPlaybackErrorMessage(input: unknown) {
     normalized.includes("authorization failed") ||
     normalized.includes("browser authentication failed")
   ) {
-    return "Die Spotify Web Playback SDK hat die Browser-Anmeldung abgelehnt. Bitte die Host-Seite einmal hart neu laden und das Quiz erneut starten.";
+    return "Die Spotify Web Playback SDK hat die Browser-Anmeldung abgelehnt. Öffne den Host unter 127.0.0.1, lade die Seite hart neu und starte das Quiz erneut.";
   }
 
   if (
